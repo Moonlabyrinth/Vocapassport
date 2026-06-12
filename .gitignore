@@ -1,0 +1,18 @@
+/node_modules
+/.next
+/out
+/build
+next-env.d.ts
+*.tsbuildinfo
+.env*
+.DS_Store
+
+# 로컬 데이터는 배포에 포함하지 않음 (클라우드는 Neon DB 사용)
+# - db.json(비밀번호 해시), secret.key 등 민감정보 보호
+/data
+
+.vercel
+.claude
+백업파일
+*.log
+*.err.log
