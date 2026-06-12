@@ -57,6 +57,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
     if (b) {
       setBookTitle(b.title);
       setTotal(b.defaultTotalScore);
+      setSession("");
     }
   }
 
@@ -154,26 +155,11 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
             </Select>
           </Field>
 
-          <Field label="회차(Day)" hint={bookTitle ? "고난도 Day40, 필수 Day50 기준" : "책을 먼저 선택하세요"}>
-            <Select
-              value={session}
-              onChange={(e) => setSession(e.target.value ? Number(e.target.value) : "")}
-              disabled={!bookTitle}
-            >
-              <option value="">선택 안 함</option>
-              {sessionOptions.map((n) => (
-                <option key={n} value={n}>
-                  {n}회차 · {sessionDayRange(n, bookTitle)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
           <Field label="책 제목">
             {books.length > 0 ? (
               <Select
                 value={bookId}
-                onChange={(e) => (e.target.value ? pickBook(e.target.value) : (setBookId(""), setBookTitle("")))}
+                onChange={(e) => (e.target.value ? pickBook(e.target.value) : (setBookId(""), setBookTitle(""), setSession("")))}
                 disabled={!classId}
               >
                 <option value="">직접 입력</option>
@@ -190,6 +176,21 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
               <Input value={bookTitle} onChange={(e) => setBookTitle(e.target.value)} placeholder="책 제목" />
             </Field>
           )}
+
+          <Field label="회차(Day)" hint={bookTitle ? "고난도 Day40, 필수 Day50 기준" : "책을 먼저 선택하세요"}>
+            <Select
+              value={session}
+              onChange={(e) => setSession(e.target.value ? Number(e.target.value) : "")}
+              disabled={!bookTitle}
+            >
+              <option value="">선택 안 함</option>
+              {sessionOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}회차 · {sessionDayRange(n, bookTitle)}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
           <Field label="만점">
             <Input type="number" min={1} value={total} onChange={(e) => setTotal(Number(e.target.value))} />
@@ -272,11 +273,24 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
                         {r.isPerfect ? <Badge color="amber">만점</Badge> : r.passed ? <Badge color="green">통과</Badge> : <Badge color="red">미통과</Badge>}
                       </td>
                       <td className="py-2 pr-3 text-gray-400">{r.examDate.slice(5)}</td>
-                      <td className="py-2 text-right">
+                      <td className="py-2">
+                        <div className="flex justify-end gap-1">
                         {!r.passed && !hasRetest && (
                           <Button size="sm" variant="soft" onClick={() => setRetestFor(r)}>재시험 예약</Button>
                         )}
                         {!r.passed && hasRetest && <Badge color="blue">예약됨</Badge>}
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={async () => {
+                              if (!confirm("이 점수 기록을 삭제할까요? 연결된 재시험 예약/결과도 함께 삭제됩니다.")) return;
+                              const result = await app.run({ type: "deleteRecord", id: r.id });
+                              if (!result.ok) alert(result.error);
+                            }}
+                          >
+                            삭제
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

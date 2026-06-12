@@ -44,6 +44,7 @@ export type Action =
     }
   | { type: "updateRecord"; id: string; patch: Partial<{ totalScore: number; actualScore: number; round: number; session: number | null; bookTitle: string; examDate: string; status: ScoreRecord["status"]; photoPath: string | null; passedOverride: boolean | null }> }
   | { type: "deleteRecord"; id: string }
+  | { type: "deleteRecords"; ids: string[] }
   | { type: "scheduleRetest"; scoreRecordId: string; scheduledAt: string }
   | { type: "cancelRetest"; id: string }
   | { type: "setRecordPassStatus"; recordId: string; passed: boolean | null }
@@ -51,8 +52,8 @@ export type Action =
   | { type: "setRetestPassStatus"; recordId: string; passed: boolean | null }
   | { type: "setRecordPassKind"; recordId: string; kind: PassKindChoice }
   | { type: "setRecordsPassKind"; recordIds: string[]; kind: PassKindChoice }
-  | { type: "createMonthlyTest"; name: string; date: string; sections: MonthlySection[] }
-  | { type: "updateMonthlyTest"; id: string; patch: Partial<{ name: string; date: string; sections: MonthlySection[] }> }
+  | { type: "createMonthlyTest"; name: string; date: string; classId?: string | null; classIds?: string[] | null; sections: MonthlySection[] }
+  | { type: "updateMonthlyTest"; id: string; patch: Partial<{ name: string; date: string; classId: string | null; classIds: string[] | null; sections: MonthlySection[] }> }
   | { type: "deleteMonthlyTest"; id: string }
   | { type: "setMonthlyResults"; monthlyTestId: string; entries: { studentId: string; scores: Record<string, number> }[] }
   | {
@@ -290,8 +291,13 @@ export function applyAction(db: Database, a: Action): ActionResult {
       return { ok: true, id: r.id, passed: r.passed, needsRetest: !r.passed };
     }
     case "deleteRecord": {
-      db.retests = db.retests.filter((rt) => rt.scoreRecordId !== a.id && rt.resultRecordId !== a.id);
-      db.records = db.records.filter((r) => r.id !== a.id);
+      deleteScoreRecords(db, [a.id]);
+      return { ok: true };
+    }
+    case "deleteRecords": {
+      const ids = [...new Set(a.ids)].filter(Boolean);
+      if (!ids.length) return { ok: false, error: "삭제할 기록을 선택하세요." };
+      deleteScoreRecords(db, ids);
       return { ok: true };
     }
 
@@ -418,10 +424,12 @@ export function applyAction(db: Database, a: Action): ActionResult {
 
     case "createMonthlyTest": {
       if (!a.name?.trim()) return { ok: false, error: "먼슬리 이름을 입력하세요." };
+      const classIds = normMonthlyClassIds(a.classIds, a.classId);
+      if (classIds.some((id) => !findClass(db, id))) return { ok: false, error: "적용할 반을 찾을 수 없습니다." };
       const sections = normSections(a.sections);
       if (!sections.length) return { ok: false, error: "영역을 1개 이상 추가하세요." };
       const id = genId("mt");
-      db.monthlyTests.push({ id, name: a.name.trim(), date: a.date, sections, createdAt: now });
+      db.monthlyTests.push({ id, classId: classIds[0] ?? null, classIds, name: a.name.trim(), date: a.date, sections, createdAt: now });
       return { ok: true, id };
     }
     case "updateMonthlyTest": {
@@ -429,6 +437,20 @@ export function applyAction(db: Database, a: Action): ActionResult {
       if (!t) return { ok: false, error: "먼슬리 테스트를 찾을 수 없습니다." };
       if (a.patch.name != null) t.name = a.patch.name.trim();
       if (a.patch.date != null) t.date = a.patch.date;
+      if (a.patch.classIds !== undefined || a.patch.classId !== undefined) {
+        const classIds = normMonthlyClassIds(a.patch.classIds, a.patch.classId);
+        if (classIds.some((id) => !findClass(db, id))) return { ok: false, error: "적용할 반을 찾을 수 없습니다." };
+        t.classId = classIds[0] ?? null;
+        t.classIds = classIds;
+        if (classIds.length) {
+          const allowed = new Set(classIds);
+          db.monthlyResults = db.monthlyResults.filter((r) => {
+            if (r.monthlyTestId !== t.id) return true;
+            const student = db.students.find((s) => s.id === r.studentId);
+            return !!student && allowed.has(student.classId);
+          });
+        }
+      }
       if (a.patch.sections != null) {
         const sections = normSections(a.patch.sections);
         if (!sections.length) return { ok: false, error: "영역을 1개 이상 두세요." };
@@ -451,7 +473,14 @@ export function applyAction(db: Database, a: Action): ActionResult {
       const t = db.monthlyTests.find((x) => x.id === a.monthlyTestId);
       if (!t) return { ok: false, error: "먼슬리 테스트를 찾을 수 없습니다." };
       const keys = new Set(t.sections.map((s) => s.key));
+      const classIds = monthlyClassIdsOf(t);
+      const allowed = new Set(classIds);
       for (const entry of a.entries) {
+        const student = db.students.find((s) => s.id === entry.studentId);
+        if (!student) return { ok: false, error: "학생을 찾을 수 없습니다." };
+        if (allowed.size > 0 && !allowed.has(student.classId)) {
+          return { ok: false, error: "이 먼슬리는 선택한 반 학생에게만 입력할 수 있습니다." };
+        }
         const cleanScores: Record<string, number> = {};
         for (const [k, v] of Object.entries(entry.scores)) {
           if (keys.has(k) && Number.isFinite(v)) cleanScores[k] = normScore(v);
@@ -483,6 +512,42 @@ export function applyAction(db: Database, a: Action): ActionResult {
     default:
       return { ok: false, error: "알 수 없는 명령" };
   }
+}
+
+function normOptionalClassId(classId: string | null | undefined): string | null {
+  const id = (classId || "").trim();
+  return id || null;
+}
+
+function normMonthlyClassIds(classIds: string[] | null | undefined, fallbackClassId?: string | null): string[] {
+  const ids = classIds !== undefined
+    ? classIds
+    : fallbackClassId
+      ? [fallbackClassId]
+      : [];
+  return [...new Set((ids || []).map((id) => id.trim()).filter(Boolean))];
+}
+
+function monthlyClassIdsOf(test: { classId?: string | null; classIds?: string[] | null }): string[] {
+  return normMonthlyClassIds(test.classIds, test.classId);
+}
+
+function deleteScoreRecords(db: Database, recordIds: string[]) {
+  const ids = new Set(recordIds.filter(Boolean));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const r of db.records) {
+      if (r.parentRecordId && ids.has(r.parentRecordId) && !ids.has(r.id)) {
+        ids.add(r.id);
+        changed = true;
+      }
+    }
+  }
+  db.retests = db.retests.filter(
+    (rt) => !ids.has(rt.scoreRecordId) && (rt.resultRecordId == null || !ids.has(rt.resultRecordId))
+  );
+  db.records = db.records.filter((r) => !ids.has(r.id));
 }
 
 function normSections(sections: MonthlySection[]): MonthlySection[] {

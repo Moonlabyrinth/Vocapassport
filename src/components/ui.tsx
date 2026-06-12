@@ -17,7 +17,7 @@ export function Card({
     <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 ${className}`}>
       {(title || right) && (
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
-          {title && <h3 className="font-semibold text-gray-800">{title}</h3>}
+          {title && <h3 className="text-lg font-semibold text-gray-800">{title}</h3>}
           {right}
         </div>
       )}
@@ -46,7 +46,7 @@ export function Button({
 }) {
   const base =
     "inline-flex items-center justify-center gap-1 rounded-xl font-medium transition disabled:opacity-40 disabled:cursor-not-allowed";
-  const sizes = size === "sm" ? "px-3 py-1.5 text-sm" : "px-4 py-2.5 text-sm";
+  const sizes = size === "sm" ? "px-3 py-1.5 text-sm" : "px-4 py-2.5 text-base";
   const variants: Record<BtnVariant, string> = {
     primary: "bg-brand-600 text-white hover:bg-brand-700",
     ghost: "bg-transparent text-gray-600 hover:bg-gray-100",
@@ -76,15 +76,15 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-gray-600 mb-1">{label}</span>
+      <span className="block text-base font-medium text-gray-600 mb-1">{label}</span>
       {children}
-      {hint && <span className="block text-xs text-gray-400 mt-1">{hint}</span>}
+      {hint && <span className="block text-sm text-gray-400 mt-1">{hint}</span>}
     </label>
   );
 }
 
 const inputCls =
-  "w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-100 outline-none bg-white";
+  "w-full rounded-xl border border-gray-200 px-3 py-2.5 text-base focus:border-brand-600 focus:ring-2 focus:ring-brand-100 outline-none bg-white";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${inputCls} ${props.className || ""}`} />;
@@ -144,9 +144,11 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 export function Badge({
   children,
   color = "gray",
+  size = "md",
 }: {
   children: React.ReactNode;
   color?: "gray" | "green" | "red" | "amber" | "indigo" | "blue";
+  size?: "sm" | "md" | "lg";
 }) {
   const colors: Record<string, string> = {
     gray: "bg-gray-100 text-gray-600",
@@ -156,8 +158,13 @@ export function Badge({
     indigo: "bg-indigo-100 text-indigo-700",
     blue: "bg-blue-100 text-blue-700",
   };
+  const sizes: Record<string, string> = {
+    sm: "px-2.5 py-0.5 text-xs",
+    md: "px-3 py-1 text-sm",
+    lg: "px-4 py-1.5 text-base sm:text-lg",
+  };
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[color]}`}>
+    <span className={`inline-flex items-center rounded-full font-medium ${sizes[size]} ${colors[color]}`}>
       {children}
     </span>
   );
@@ -200,7 +207,7 @@ export function Modal({
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-center text-sm text-gray-400 py-10">{children}</div>
+    <div className="text-center text-base text-gray-400 py-10">{children}</div>
   );
 }
 
@@ -224,9 +231,9 @@ export function Stat({
   };
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className={`text-2xl font-bold mt-0.5 ${accents[accent]}`}>{value}</div>
-      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+      <div className="text-sm text-gray-500">{label}</div>
+      <div className={`text-3xl font-bold mt-0.5 ${accents[accent]}`}>{value}</div>
+      {sub && <div className="text-sm text-gray-400 mt-0.5">{sub}</div>}
     </div>
   );
 }

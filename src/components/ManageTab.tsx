@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { AppStateHook, apiAdmin } from "@/lib/client";
 import { Button, Card, Field, Input, Select, Badge, EmptyState, Modal } from "./ui";
-import { ScheduleType, PassKindChoice } from "@/lib/types";
-import { isActiveStudent } from "@/lib/logic";
+import DatePicker from "./DatePicker";
+import { ScheduleType, PassKindChoice, ScoreRecord } from "@/lib/types";
+import { isActiveStudent, percentOf, round1 } from "@/lib/logic";
+import { recordLessonLabel } from "@/lib/course";
 import { NeedsRetestRow, RetestHistoryRow } from "./RetestTab";
 
 interface IssuedCred { name: string; loginId: string; password: string }
@@ -84,9 +86,250 @@ export default function ManageTab({ app }: { app: AppStateHook }) {
         )}
       </Card>
 
+      <ScoreRecordManager app={app} />
+
       {cls && <ClassDetail key={cls.id} app={app} classId={cls.id} />}
     </div>
   );
+}
+
+function ScoreRecordManager({ app }: { app: AppStateHook }) {
+  const { db, run } = app;
+  const [classId, setClassId] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [roundFilter, setRoundFilter] = useState<number | 0>(0);
+  const [query, setQuery] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+
+  const students = useMemo(
+    () =>
+      db.students
+        .filter((s) => !classId || s.classId === classId)
+        .sort((a, b) => a.name.localeCompare(b.name, "ko")),
+    [db.students, classId]
+  );
+
+  const records = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return db.records
+      .filter((r) => {
+        const student = db.students.find((s) => s.id === r.studentId);
+        const cls = db.classes.find((c) => c.id === r.classId);
+        if (classId && r.classId !== classId) return false;
+        if (studentId && r.studentId !== studentId) return false;
+        if (roundFilter && r.round !== roundFilter) return false;
+        if (startDate && r.examDate < startDate) return false;
+        if (endDate && r.examDate > endDate) return false;
+        if (!q) return true;
+        return [
+          student?.name,
+          cls?.name,
+          r.bookTitle,
+          r.examDate,
+          recordLessonLabel(r),
+          r.passed ? "통과" : "미통과",
+        ]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      })
+      .sort((a, b) => b.examDate.localeCompare(a.examDate) || b.createdAt.localeCompare(a.createdAt));
+  }, [db.records, db.students, db.classes, classId, studentId, roundFilter, startDate, endDate, query]);
+
+  const visibleRecords = records.slice(0, 200);
+  const visibleIds = visibleRecords.map((r) => r.id);
+  const selectedVisibleIds = [...selectedIds].filter((id) => visibleIds.includes(id));
+  const allVisibleSelected = visibleIds.length > 0 && selectedVisibleIds.length === visibleIds.length;
+
+  function setClassFilter(id: string) {
+    setClassId(id);
+    setStudentId("");
+    setSelectedIds(new Set());
+  }
+
+  function toggleRecord(id: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  async function deleteOne(record: ScoreRecord) {
+    const student = db.students.find((s) => s.id === record.studentId);
+    if (
+      !confirm(
+        `${student?.name ?? "학생"} ${record.examDate} ${record.bookTitle} ${recordLessonLabel(record)} 기록을 삭제할까요?\n연결된 재시험 예약/결과도 함께 삭제됩니다.`
+      )
+    ) return;
+    setBusy(true);
+    const result = await run({ type: "deleteRecord", id: record.id });
+    setBusy(false);
+    if (!result.ok) return alert(result.error);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(record.id);
+      return next;
+    });
+  }
+
+  async function deleteSelected() {
+    if (!selectedVisibleIds.length) return;
+    if (
+      !confirm(
+        `선택한 점수 기록 ${selectedVisibleIds.length}건을 삭제할까요?\n연결된 재시험 예약/결과도 함께 삭제됩니다.`
+      )
+    ) return;
+    setBusy(true);
+    const result = await run({ type: "deleteRecords", ids: selectedVisibleIds });
+    setBusy(false);
+    if (!result.ok) return alert(result.error);
+    setSelectedIds(new Set());
+  }
+
+  return (
+    <Card
+      title="전체 성적 검색/삭제"
+      right={
+        <Button size="sm" variant="danger" disabled={busy || !selectedVisibleIds.length} onClick={deleteSelected}>
+          선택 삭제
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-3">
+        <Field label="반">
+          <Select value={classId} onChange={(e) => setClassFilter(e.target.value)}>
+            <option value="">전체 반</option>
+            {db.classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="학생">
+          <Select value={studentId} onChange={(e) => { setStudentId(e.target.value); setSelectedIds(new Set()); }}>
+            <option value="">전체 학생</option>
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="회독">
+          <Select value={roundFilter} onChange={(e) => { setRoundFilter(Number(e.target.value)); setSelectedIds(new Set()); }}>
+            <option value={0}>전체 회독</option>
+            <option value={1}>1회독</option>
+            <option value={2}>2회독</option>
+            <option value={3}>3회독</option>
+          </Select>
+        </Field>
+        <Field label="시작일">
+          <DatePicker value={startDate} onChange={(v) => { setStartDate(v); setSelectedIds(new Set()); }} placeholder="처음부터" />
+        </Field>
+        <Field label="종료일">
+          <DatePicker value={endDate} onChange={(v) => { setEndDate(v); setSelectedIds(new Set()); }} placeholder="현재까지" />
+        </Field>
+        <Field label="검색어">
+          <Input value={query} onChange={(e) => { setQuery(e.target.value); setSelectedIds(new Set()); }} placeholder="학생, 책, 날짜" />
+        </Field>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge color={records.length ? "indigo" : "gray"}>검색 결과 {records.length}건</Badge>
+          {records.length > visibleRecords.length && <Badge color="gray">최근 {visibleRecords.length}건 표시</Badge>}
+          <Badge color={selectedVisibleIds.length ? "blue" : "gray"}>선택 {selectedVisibleIds.length}건</Badge>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setClassId("");
+            setStudentId("");
+            setRoundFilter(0);
+            setQuery("");
+            setStartDate("");
+            setEndDate("");
+            setSelectedIds(new Set());
+          }}
+        >
+          필터 초기화
+        </Button>
+      </div>
+
+      {visibleRecords.length === 0 ? (
+        <EmptyState>조건에 맞는 점수 기록이 없습니다.</EmptyState>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm whitespace-nowrap">
+            <thead>
+              <tr className="text-left text-gray-400 border-b border-gray-100">
+                <th className="py-2 pr-3 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={(e) => setSelectedIds(e.target.checked ? new Set(visibleIds) : new Set())}
+                    className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                    aria-label="검색된 성적 전체 선택"
+                  />
+                </th>
+                <th className="py-2 pr-3 font-medium">날짜</th>
+                <th className="py-2 pr-3 font-medium">반</th>
+                <th className="py-2 pr-3 font-medium">학생</th>
+                <th className="py-2 pr-3 font-medium">책/회차</th>
+                <th className="py-2 pr-3 font-medium">점수</th>
+                <th className="py-2 pr-3 font-medium">판정</th>
+                <th className="py-2 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRecords.map((r) => {
+                const student = db.students.find((s) => s.id === r.studentId);
+                const cls = db.classes.find((c) => c.id === r.classId);
+                const pct = round1(percentOf(r.actualScore, r.totalScore));
+                return (
+                  <tr key={r.id} className="border-b border-gray-50">
+                    <td className="py-2 pr-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(r.id)}
+                        onChange={(e) => toggleRecord(r.id, e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                        aria-label="성적 기록 선택"
+                      />
+                    </td>
+                    <td className="py-2 pr-3 text-gray-500">{r.examDate}</td>
+                    <td className="py-2 pr-3 text-gray-500">{cls?.name ?? "-"}</td>
+                    <td className="py-2 pr-3 text-gray-800">{student?.name ?? "-"}</td>
+                    <td className="py-2 pr-3 text-gray-600">
+                      <div>{r.bookTitle}</div>
+                      <div className="text-xs text-gray-400">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</div>
+                    </td>
+                    <td className="py-2 pr-3 text-gray-700">{r.actualScore}/{r.totalScore} <span className="text-xs text-gray-400">({pct}%)</span></td>
+                    <td className="py-2 pr-3">
+                      {recordBadge(r)}
+                    </td>
+                    <td className="py-2 text-right">
+                      <Button size="sm" variant="danger" disabled={busy} onClick={() => deleteOne(r)}>삭제</Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function recordBadge(record: ScoreRecord) {
+  if (!record.passed) return <Badge color="red">미통과</Badge>;
+  if (record.passKind === "exempt") return <Badge color="gray">면제</Badge>;
+  if (record.passKind === "retest" || record.attemptType === "retest") return <Badge color="blue">재시험 통과</Badge>;
+  if (record.isPerfect) return <Badge color="amber">만점</Badge>;
+  return <Badge color="green">통과</Badge>;
 }
 
 function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {

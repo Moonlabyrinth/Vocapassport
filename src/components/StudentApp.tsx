@@ -32,8 +32,16 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
 
   const [retestFor, setRetestFor] = useState<ScoreRecord | null>(null);
   const [showPw, setShowPw] = useState(false);
+  const [activeTab, setActiveTab] = useState<"word" | "monthly">("word");
 
   const records = db.records;
+  const monthlyResults = [...db.monthlyTests]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((t) => {
+      const res = db.monthlyResults.find((r) => r.monthlyTestId === t.id);
+      return res ? { test: t, result: res } : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => !!item);
   const stats = computeStreaks(records);
   const rewardStats = computeRewardStats(records);
   const ordered = sortChrono(records);
@@ -85,170 +93,196 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
           </div>
         )}
 
-        {/* 요약 */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat label="응시" value={stats.total} accent="indigo" />
-          <Stat label="평균" value={stats.avgPercent != null ? `${round1(stats.avgPercent)}%` : "-"} accent="green" />
-          <Stat label="통과" value={stats.passCount} accent="green" sub={`연속 ${stats.currentPassStreak}`} />
-          <Stat label="만점" value={stats.perfectCount} accent="amber" sub={`연속 ${stats.currentPerfectStreak}`} />
+        <div className="grid grid-cols-2 rounded-xl border border-gray-200 bg-gray-50 p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab("word")}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              activeTab === "word" ? "bg-white text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            단어시험
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("monthly")}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              activeTab === "monthly" ? "bg-white text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            먼슬리
+          </button>
         </div>
 
-        <Card title="여름학기 성취">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Stat label="정규 시험" value={`${rewardStats.total}/${REWARD_DEFAULT_TEST_COUNT}`} accent="indigo" />
-            <Stat label="통과" value={`${rewardStats.passCount}/${REWARD_PASS_GOAL}`} accent="green" sub={rewardStats.earnedReward ? "성취 달성" : `남은 통과 ${rewardStats.remainingPasses}`} />
-            <Stat label="연속 통과" value={rewardStats.currentPassStreak} accent="green" sub={`최고 ${rewardStats.bestPassStreak}`} />
-            <Stat label="연속 만점" value={rewardStats.currentPerfectStreak} accent="amber" sub={`최고 ${rewardStats.bestPerfectStreak}`} />
-          </div>
-          <p className="text-xs text-gray-400 mt-3">
-            여름학기 성취는 2026.06.10 이후 정규 시험만 계산합니다. 재시험 기록은 성취 기준 횟수에서 제외됩니다.
-          </p>
-        </Card>
-
-        {/* 재시험 필요 */}
-        {needScheduling.length > 0 && (
-          <Card title="🔴 재시험을 예약하세요">
-            <ul className="space-y-2">
-              {needScheduling.map((r) => (
-                <li key={r.id} className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-                  <div className="text-sm">
-                    <div className="font-medium text-gray-800">{r.bookTitle}</div>
-                    <div className="text-gray-500">
-                      {recordLessonLabel(r)} · {r.actualScore}/{r.totalScore} · 컷 {cutLabel(r)} 미달
-                    </div>
-                  </div>
-                  <Button size="sm" onClick={() => setRetestFor(r)}>재시험 예약</Button>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-
-        {/* 예약된 재시험 */}
-        <Card title={`예약된 재시험 (${scheduledRetests.length})`}>
-          {scheduledRetests.length === 0 ? (
-            <EmptyState>예약된 재시험이 없습니다.</EmptyState>
-          ) : (
-            <ul className="space-y-2">
-              {scheduledRetests.map((rt) => {
-                const origin = db.records.find((r) => r.id === rt.scoreRecordId);
-                const soon = new Date(rt.scheduledAt).getTime() - Date.now() < 2 * 3600 * 1000;
-                const past = new Date(rt.scheduledAt).getTime() < Date.now();
-                return (
-                  <li key={rt.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
-                    <div className="text-sm">
-                      <div className="font-medium text-gray-800">{formatDateTime(rt.scheduledAt)}</div>
-                      <div className="text-gray-500">{origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : ""}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge color={past ? "red" : soon ? "amber" : "blue"}>{relativeFromNow(rt.scheduledAt)}</Badge>
-                      <Button size="sm" variant="ghost" onClick={async () => {
-                        if (confirm("이 재시험 예약을 취소할까요?")) await app.run({ type: "cancelRetest", id: rt.id });
-                      }}>취소</Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <p className="text-xs text-gray-400 mt-3">
-            ※ 예약 24시간 전·2시간 전 알림은 추후 휴대폰 푸시로 제공됩니다. (현재는 일정·남은시간 표시)
-          </p>
-        </Card>
-
-        {/* 추이 */}
-        {trend.length > 0 && (
-          <Card title="내 점수 추이">
-            <div style={{ width: "100%", height: 240 }}>
-              <ResponsiveContainer>
-                <LineChart data={trend} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#eef0f4" />
-                  <XAxis dataKey="label" fontSize={12} tickMargin={6} />
-                  <YAxis domain={[0, 100]} fontSize={12} unit="%" />
-                  <Tooltip formatter={(v: number) => `${v}%`} />
-                  <Line type="monotone" dataKey="pct" name="점수" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="cut" name="통과컷" stroke="#f43f5e" strokeWidth={1} strokeDasharray="4 4" dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+        {activeTab === "word" && (
+          <>
+            {/* 요약 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Stat label="응시" value={stats.total} accent="indigo" />
+              <Stat label="평균" value={stats.avgPercent != null ? `${round1(stats.avgPercent)}%` : "-"} accent="green" />
+              <Stat label="통과" value={stats.passCount} accent="green" sub={`연속 ${stats.currentPassStreak}`} />
+              <Stat label="만점" value={stats.perfectCount} accent="amber" sub={`연속 ${stats.currentPerfectStreak}`} />
             </div>
-          </Card>
-        )}
 
-        {/* 내 성적 */}
-        <Card title="내 성적">
-          {records.length === 0 ? (
-            <EmptyState>아직 등록된 성적이 없습니다.</EmptyState>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-400 border-b border-gray-100">
-                    <th className="py-2 pr-3 font-medium">날짜</th>
-                    <th className="py-2 pr-3 font-medium">책</th>
-                    <th className="py-2 pr-3 font-medium">회독</th>
-                    <th className="py-2 pr-3 font-medium">점수</th>
-                    <th className="py-2 font-medium">판정</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...records].sort((a, b) => `${b.examDate}${b.createdAt}`.localeCompare(`${a.examDate}${a.createdAt}`)).map((r) => (
-                    <tr key={r.id} className="border-b border-gray-50">
-                      <td className="py-2 pr-3 text-gray-500">{r.examDate.slice(5)}</td>
-                      <td className="py-2 pr-3 text-gray-700">{r.bookTitle}</td>
-                      <td className="py-2 pr-3 text-gray-500">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</td>
-                      <td className="py-2 pr-3 text-gray-700">{r.actualScore}/{r.totalScore}</td>
-                      <td className="py-2">
-                        {!r.passed ? (
-                          <Badge color="red">미통과</Badge>
-                        ) : r.passKind === "exempt" ? (
-                          <Badge color="gray">면제</Badge>
-                        ) : r.passKind === "retest" ? (
-                          <Badge color="blue">재시험 통과</Badge>
-                        ) : r.passKind === "main" ? (
-                          <Badge color="green">본시험 통과</Badge>
-                        ) : r.isPerfect ? (
-                          <Badge color="amber">만점</Badge>
-                        ) : (
-                          <Badge color="green">통과</Badge>
-                        )}
-                      </td>
-                    </tr>
+            <Card title="여름학기 성취">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Stat label="정규 시험" value={`${rewardStats.total}/${REWARD_DEFAULT_TEST_COUNT}`} accent="indigo" />
+                <Stat label="통과" value={`${rewardStats.passCount}/${REWARD_PASS_GOAL}`} accent="green" sub={rewardStats.earnedReward ? "성취 달성" : `남은 통과 ${rewardStats.remainingPasses}`} />
+                <Stat label="연속 통과" value={rewardStats.currentPassStreak} accent="green" sub={`최고 ${rewardStats.bestPassStreak}`} />
+                <Stat label="연속 만점" value={rewardStats.currentPerfectStreak} accent="amber" sub={`최고 ${rewardStats.bestPerfectStreak}`} />
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                여름학기 성취는 2026.06.10 이후 정규 시험만 계산합니다. 재시험 기록은 성취 기준 횟수에서 제외됩니다.
+              </p>
+            </Card>
+
+            {/* 재시험 필요 */}
+            {needScheduling.length > 0 && (
+              <Card title="재시험을 예약하세요">
+                <ul className="space-y-2">
+                  {needScheduling.map((r) => (
+                    <li key={r.id} className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                      <div className="text-sm">
+                        <div className="font-medium text-gray-800">{r.bookTitle}</div>
+                        <div className="text-gray-500">
+                          {recordLessonLabel(r)} · {r.actualScore}/{r.totalScore} · 컷 {cutLabel(r)} 미달
+                        </div>
+                      </div>
+                      <Button size="sm" onClick={() => setRetestFor(r)}>재시험 예약</Button>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+                </ul>
+              </Card>
+            )}
 
-        {/* 먼슬리 결과 (단어시험과 분리) */}
-        {db.monthlyTests.length > 0 && (
+            {/* 예약된 재시험 */}
+            <Card title={`예약된 재시험 (${scheduledRetests.length})`}>
+              {scheduledRetests.length === 0 ? (
+                <EmptyState>예약된 재시험이 없습니다.</EmptyState>
+              ) : (
+                <ul className="space-y-2">
+                  {scheduledRetests.map((rt) => {
+                    const origin = db.records.find((r) => r.id === rt.scoreRecordId);
+                    const soon = new Date(rt.scheduledAt).getTime() - Date.now() < 2 * 3600 * 1000;
+                    const past = new Date(rt.scheduledAt).getTime() < Date.now();
+                    return (
+                      <li key={rt.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
+                        <div className="text-sm">
+                          <div className="font-medium text-gray-800">{formatDateTime(rt.scheduledAt)}</div>
+                          <div className="text-gray-500">{origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : ""}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge color={past ? "red" : soon ? "amber" : "blue"}>{relativeFromNow(rt.scheduledAt)}</Badge>
+                          <Button size="sm" variant="ghost" onClick={async () => {
+                            if (confirm("이 재시험 예약을 취소할까요?")) await app.run({ type: "cancelRetest", id: rt.id });
+                          }}>취소</Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <p className="text-xs text-gray-400 mt-3">
+                ※ 예약 24시간 전·2시간 전 알림은 추후 휴대폰 푸시로 제공됩니다. (현재는 일정·남은시간 표시)
+              </p>
+            </Card>
+
+            {/* 추이 */}
+            {trend.length > 0 && (
+              <Card title="내 점수 추이">
+                <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={trend} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef0f4" />
+                      <XAxis dataKey="label" fontSize={12} tickMargin={6} />
+                      <YAxis domain={[0, 100]} fontSize={12} unit="%" />
+                      <Tooltip formatter={(v: number) => `${v}%`} />
+                      <Line type="monotone" dataKey="pct" name="점수" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="cut" name="통과컷" stroke="#f43f5e" strokeWidth={1} strokeDasharray="4 4" dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
+
+            {/* 내 성적 */}
+            <Card title="내 성적">
+              {records.length === 0 ? (
+                <EmptyState>아직 등록된 성적이 없습니다.</EmptyState>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-400 border-b border-gray-100">
+                        <th className="py-2 pr-3 font-medium">날짜</th>
+                        <th className="py-2 pr-3 font-medium">책</th>
+                        <th className="py-2 pr-3 font-medium">회독</th>
+                        <th className="py-2 pr-3 font-medium">점수</th>
+                        <th className="py-2 font-medium">판정</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...records].sort((a, b) => `${b.examDate}${b.createdAt}`.localeCompare(`${a.examDate}${a.createdAt}`)).map((r) => (
+                        <tr key={r.id} className="border-b border-gray-50">
+                          <td className="py-2 pr-3 text-gray-500">{r.examDate.slice(5)}</td>
+                          <td className="py-2 pr-3 text-gray-700">{r.bookTitle}</td>
+                          <td className="py-2 pr-3 text-gray-500">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</td>
+                          <td className="py-2 pr-3 text-gray-700">{r.actualScore}/{r.totalScore}</td>
+                          <td className="py-2">
+                            {!r.passed ? (
+                              <Badge color="red">미통과</Badge>
+                            ) : r.passKind === "exempt" ? (
+                              <Badge color="gray">면제</Badge>
+                            ) : r.passKind === "retest" ? (
+                              <Badge color="blue">재시험 통과</Badge>
+                            ) : r.passKind === "main" ? (
+                              <Badge color="green">본시험 통과</Badge>
+                            ) : r.isPerfect ? (
+                              <Badge color="amber">만점</Badge>
+                            ) : (
+                              <Badge color="green">통과</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          </>
+        )}
+
+        {activeTab === "monthly" && (
           <Card title="먼슬리 테스트 결과">
-            <div className="space-y-3">
-              {[...db.monthlyTests]
-                .sort((a, b) => b.date.localeCompare(a.date))
-                .map((t) => {
-                  const res = db.monthlyResults.find((r) => r.monthlyTestId === t.id);
-                  if (!res) return null;
+            {monthlyResults.length === 0 ? (
+              <EmptyState>아직 등록된 먼슬리 결과가 없습니다.</EmptyState>
+            ) : (
+              <div className="space-y-3">
+                {monthlyResults.map(({ test: t, result: res }) => {
                   const total = monthlyTotal(res.scores, t);
                   const max = monthlyMaxTotal(t);
                   const pct = round1(monthlyPercent(res.scores, t));
                   return (
                     <div key={t.id} className="rounded-xl border border-gray-100 p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="font-medium text-gray-800">{t.name} <span className="text-xs text-gray-400">· {t.date}</span></div>
-                        <Badge color="indigo">총점 {round1(total)} / {max} ({pct}%)</Badge>
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-2">
+                        <div className="text-lg font-semibold text-gray-800">
+                          {t.name} <span className="text-sm font-normal text-gray-400">· {t.date}</span>
+                        </div>
+                        <Badge color="indigo" size="lg">총점 {round1(total)} / {max} ({pct}%)</Badge>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {t.sections.map((s) => (
-                          <span key={s.key} className="text-xs bg-gray-50 rounded-lg px-2 py-1 text-gray-600">
-                            {s.label} <b className="text-gray-800">{res.scores[s.key] ?? "-"}</b>/{s.maxScore}
+                          <span key={s.key} className="text-sm bg-gray-50 rounded-lg px-3 py-1.5 text-gray-600">
+                            {s.label} <b className="text-base text-gray-800">{res.scores[s.key] ?? "-"}</b>/{s.maxScore}
                           </span>
                         ))}
                       </div>
                     </div>
                   );
                 })}
-            </div>
+              </div>
+            )}
           </Card>
         )}
       </main>

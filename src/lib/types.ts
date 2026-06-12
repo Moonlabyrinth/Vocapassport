@@ -119,9 +119,11 @@ export interface MonthlySection {
   maxScore: number; // 영역 만점
 }
 
-/** 먼슬리 테스트 1회 (반 구분 없이 전체 정의, 점수만 기록 — 통과/재시험 없음) */
+/** 먼슬리 테스트 1회 (classIds가 비어 있으면 전체 공통, 있으면 해당 반들 전용) */
 export interface MonthlyTest {
   id: string;
+  classId?: string | null; // 이전 데이터 호환용. 새 데이터는 classIds를 사용.
+  classIds?: string[] | null; // null/undefined/빈 배열 = 전체 공통
   name: string; // 예: "6월 먼슬리"
   date: string; // YYYY-MM-DD
   sections: MonthlySection[];
