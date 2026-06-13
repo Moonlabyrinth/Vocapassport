@@ -249,6 +249,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
   const [expanded, setExpanded] = useState(false);
   const [visibleLimit, setVisibleLimit] = useState(RECORD_PAGE_SIZE);
   const [editingRecord, setEditingRecord] = useState<ScoreRecord | null>(null);
+  const [bulkEditing, setBulkEditing] = useState(false);
 
   const students = useMemo(
     () =>
@@ -276,6 +277,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
           r.bookTitle,
           r.examDate,
           recordLessonLabel(r),
+          r.isAbsent ? "결석" : null,
           r.passed ? "통과" : "미통과",
         ]
           .filter(Boolean)
@@ -344,9 +346,14 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
       right={
         <div className="flex items-center gap-1">
           {expanded && (
-            <Button size="sm" variant="danger" disabled={busy || !selectedVisibleIds.length} onClick={deleteSelected}>
-              선택 삭제
-            </Button>
+            <>
+              <Button size="sm" variant="soft" disabled={busy || !selectedVisibleIds.length} onClick={() => setBulkEditing(true)}>
+                선택 수정
+              </Button>
+              <Button size="sm" variant="danger" disabled={busy || !selectedVisibleIds.length} onClick={deleteSelected}>
+                선택 삭제
+              </Button>
+            </>
           )}
           <DisclosureButton expanded={expanded} onClick={() => setExpanded((v) => !v)} />
         </div>
@@ -450,7 +457,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
               {visibleRecords.map((r) => {
                 const student = db.students.find((s) => s.id === r.studentId);
                 const cls = db.classes.find((c) => c.id === r.classId);
-                const pct = round1(percentOf(r.actualScore, r.totalScore));
+                const pct = r.isAbsent ? null : round1(percentOf(r.actualScore, r.totalScore));
                 return (
                   <tr key={r.id} className="border-b border-gray-50">
                     <td className="py-2 pr-3">
@@ -469,7 +476,9 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
                       <div>{r.bookTitle}</div>
                       <div className="text-xs text-gray-400">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</div>
                     </td>
-                    <td className="py-2 pr-3 text-gray-700">{r.actualScore}/{r.totalScore} <span className="text-xs text-gray-400">({pct}%)</span></td>
+                    <td className="py-2 pr-3 text-gray-700">
+                      {r.isAbsent ? "결석" : <>{r.actualScore}/{r.totalScore} <span className="text-xs text-gray-400">({pct}%)</span></>}
+                    </td>
                     <td className="py-2 pr-3">
                       {recordBadge(r)}
                     </td>
@@ -498,6 +507,17 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
     </Card>
     {editingRecord && (
       <EditScoreRecordModal app={app} record={editingRecord} onClose={() => setEditingRecord(null)} />
+    )}
+    {bulkEditing && (
+      <BulkEditScoreRecordsModal
+        app={app}
+        recordIds={selectedVisibleIds}
+        onClose={() => setBulkEditing(false)}
+        onDone={() => {
+          setBulkEditing(false);
+          setSelectedIds(new Set());
+        }}
+      />
     )}
     </>
   );
@@ -532,6 +552,7 @@ function EditScoreRecordModal({
   const [session, setSession] = useState<number | "">(record.session ?? "");
   const [totalScore, setTotalScore] = useState(String(record.totalScore));
   const [actualScore, setActualScore] = useState(String(record.actualScore));
+  const [isAbsent, setIsAbsent] = useState(!!record.isAbsent);
   const [examDate, setExamDate] = useState(record.examDate);
   const [passChoice, setPassChoice] = useState<PassKindChoice>(passKindChoiceOf(record));
   const [busy, setBusy] = useState(false);
@@ -543,7 +564,7 @@ function EditScoreRecordModal({
   const previewActual = Number(actualScore);
   const previewTotal = Number(totalScore);
   const previewPercent =
-    Number.isFinite(previewActual) && Number.isFinite(previewTotal) && previewTotal > 0
+    !isAbsent && Number.isFinite(previewActual) && Number.isFinite(previewTotal) && previewTotal > 0
       ? round1(percentOf(previewActual, previewTotal))
       : null;
 
@@ -560,8 +581,8 @@ function EditScoreRecordModal({
   async function save() {
     if (!bookTitle.trim()) return alert("책 제목을 입력하세요.");
     if (!totalScore || Number(totalScore) <= 0) return alert("만점을 입력하세요.");
-    if (actualScore === "") return alert("실제 성적을 입력하세요.");
-    if (Number(actualScore) > Number(totalScore)) return alert("실제 성적은 만점보다 클 수 없습니다.");
+    if (!isAbsent && actualScore === "") return alert("실제 성적을 입력하세요.");
+    if (!isAbsent && Number(actualScore) > Number(totalScore)) return alert("실제 성적은 만점보다 클 수 없습니다.");
 
     setBusy(true);
     const updateResult = await run({
@@ -573,7 +594,8 @@ function EditScoreRecordModal({
         round,
         session: session === "" ? null : Number(session),
         totalScore: Number(totalScore),
-        actualScore: Number(actualScore),
+        actualScore: isAbsent ? 0 : Number(actualScore),
+        isAbsent,
         examDate,
       },
     });
@@ -653,7 +675,29 @@ function EditScoreRecordModal({
           </Field>
 
           <Field label="실제 성적">
-            <Input type="number" min={0} step="0.1" value={actualScore} onChange={(e) => setActualScore(e.target.value)} />
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={actualScore}
+              onChange={(e) => setActualScore(e.target.value)}
+              disabled={isAbsent}
+            />
+          </Field>
+
+          <Field label="결석 여부" hint="결석은 평균 점수 계산에서 제외됩니다.">
+            <label className="flex h-[46px] items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-base text-gray-700">
+              <input
+                type="checkbox"
+                checked={isAbsent}
+                onChange={(e) => {
+                  setIsAbsent(e.target.checked);
+                  if (e.target.checked) setActualScore("");
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-brand-600"
+              />
+              결석
+            </label>
           </Field>
 
           <Field label="판정">
@@ -669,6 +713,7 @@ function EditScoreRecordModal({
 
         <div className="flex flex-wrap items-center gap-2">
           {previewPercent != null && <Badge color="gray">백점환산 {previewPercent}점</Badge>}
+          {isAbsent && <Badge color="gray">결석으로 표시</Badge>}
           {passChoice === "auto" && <Badge color="indigo">저장 후 자동 재계산</Badge>}
           {passChoice !== "auto" && <Badge color="amber">선생님 수동 판정</Badge>}
         </div>
@@ -682,7 +727,244 @@ function EditScoreRecordModal({
   );
 }
 
+interface BulkRecordPatch {
+  bookId?: string | null;
+  bookTitle?: string;
+  round?: number;
+  session?: number | null;
+  totalScore?: number;
+  actualScore?: number;
+  isAbsent?: boolean;
+  examDate?: string;
+}
+
+function BulkEditScoreRecordsModal({
+  app,
+  recordIds,
+  onClose,
+  onDone,
+}: {
+  app: AppStateHook;
+  recordIds: string[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { db, run } = app;
+  const records = recordIds
+    .map((id) => db.records.find((record) => record.id === id))
+    .filter((record): record is ScoreRecord => !!record);
+  const classIds = [...new Set(records.map((record) => record.classId))];
+  const singleClassId = classIds.length === 1 ? classIds[0] : "";
+  const books = singleClassId ? db.books.filter((book) => book.classId === singleClassId) : [];
+
+  const [applyDate, setApplyDate] = useState(false);
+  const [examDate, setExamDate] = useState(records[0]?.examDate ?? "");
+  const [applyBook, setApplyBook] = useState(false);
+  const [bookId, setBookId] = useState("");
+  const [bookTitle, setBookTitle] = useState("");
+  const [applyRound, setApplyRound] = useState(false);
+  const [round, setRound] = useState(records[0]?.round ?? 1);
+  const [applySession, setApplySession] = useState(false);
+  const [session, setSession] = useState<number | "">(records[0]?.session ?? "");
+  const [applyTotal, setApplyTotal] = useState(false);
+  const [totalScore, setTotalScore] = useState(String(records[0]?.totalScore ?? ""));
+  const [applyActual, setApplyActual] = useState(false);
+  const [actualScore, setActualScore] = useState("");
+  const [applyAbsent, setApplyAbsent] = useState(false);
+  const [isAbsent, setIsAbsent] = useState(false);
+  const [applyPass, setApplyPass] = useState(false);
+  const [passChoice, setPassChoice] = useState<PassKindChoice>("auto");
+  const [busy, setBusy] = useState(false);
+
+  const sessionBookTitle = applyBook && bookTitle ? bookTitle : records[0]?.bookTitle ?? "";
+  const sessionOptions = sessionBookTitle
+    ? Array.from({ length: maxSessionsForBook(sessionBookTitle) }, (_, i) => i + 1)
+    : [];
+
+  function pickBook(id: string) {
+    setBookId(id);
+    const book = books.find((item) => item.id === id);
+    if (book) {
+      setBookTitle(book.title);
+      setTotalScore(String(book.defaultTotalScore));
+      setApplyTotal(true);
+      setSession("");
+    }
+  }
+
+  async function save() {
+    if (!records.length) return alert("선택된 기록이 없습니다.");
+    const patch: BulkRecordPatch = {};
+
+    if (applyDate) {
+      if (!examDate) return alert("적용할 시험 날짜를 선택하세요.");
+      patch.examDate = examDate;
+    }
+    if (applyBook) {
+      if (!bookTitle.trim()) return alert("적용할 책 제목을 입력하세요.");
+      patch.bookId = bookId || null;
+      patch.bookTitle = bookTitle.trim();
+    }
+    if (applyRound) patch.round = round;
+    if (applySession) patch.session = session === "" ? null : Number(session);
+    if (applyTotal) {
+      if (!totalScore || Number(totalScore) <= 0) return alert("적용할 만점을 입력하세요.");
+      patch.totalScore = Number(totalScore);
+    }
+    if (applyActual) {
+      if (actualScore === "") return alert("적용할 실제 성적을 입력하세요.");
+      patch.actualScore = Number(actualScore);
+    }
+    if (applyAbsent) patch.isAbsent = isAbsent;
+
+    const hasPatch = Object.keys(patch).length > 0;
+    if (!hasPatch && !applyPass) return alert("적용할 항목을 하나 이상 선택하세요.");
+
+    setBusy(true);
+    if (hasPatch) {
+      const updateResult = await run({ type: "updateRecords", ids: recordIds, patch });
+      if (!updateResult.ok) {
+        setBusy(false);
+        return alert(updateResult.error);
+      }
+    }
+    if (applyPass) {
+      const passResult = await run({ type: "setRecordsPassKind", recordIds, kind: passChoice });
+      if (!passResult.ok) {
+        setBusy(false);
+        return alert(passResult.error);
+      }
+    }
+    setBusy(false);
+    onDone();
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} title={`선택 성적 일괄 수정 (${records.length}건)`} width="max-w-3xl">
+      <div className="space-y-4">
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          체크한 항목만 선택된 기록 전체에 적용됩니다. 체크하지 않은 항목은 그대로 둡니다.
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <BulkField enabled={applyDate} onToggle={setApplyDate} label="시험 날짜">
+            <DatePicker value={examDate} onChange={setExamDate} />
+          </BulkField>
+
+          <BulkField enabled={applyBook} onToggle={setApplyBook} label="책">
+            <div className="space-y-2">
+              <Select
+                value={bookId}
+                onChange={(e) => (e.target.value ? pickBook(e.target.value) : (setBookId(""), setBookTitle("")))}
+                disabled={!singleClassId}
+              >
+                <option value="">{singleClassId ? "직접 입력" : "여러 반 선택 시 직접 입력만 가능"}</option>
+                {books.map((book) => (
+                  <option key={book.id} value={book.id}>{book.title}</option>
+                ))}
+              </Select>
+              <Input
+                value={bookTitle}
+                onChange={(e) => {
+                  setBookTitle(e.target.value);
+                  setBookId("");
+                }}
+                placeholder="적용할 책 제목"
+              />
+            </div>
+          </BulkField>
+
+          <BulkField enabled={applyRound} onToggle={setApplyRound} label="회독">
+            <Select value={round} onChange={(e) => setRound(Number(e.target.value))}>
+              <option value={1}>1회독</option>
+              <option value={2}>2회독</option>
+              <option value={3}>3회독</option>
+            </Select>
+          </BulkField>
+
+          <BulkField enabled={applySession} onToggle={setApplySession} label="회차(Day)">
+            <Select value={session} onChange={(e) => setSession(e.target.value ? Number(e.target.value) : "")}>
+              <option value="">선택 안 함</option>
+              {sessionOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}회차 · {sessionDayRange(n, sessionBookTitle)}
+                </option>
+              ))}
+            </Select>
+          </BulkField>
+
+          <BulkField enabled={applyTotal} onToggle={setApplyTotal} label="만점">
+            <Input type="number" min={1} step="0.1" value={totalScore} onChange={(e) => setTotalScore(e.target.value)} />
+          </BulkField>
+
+          <BulkField enabled={applyActual} onToggle={setApplyActual} label="실제 성적">
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={actualScore}
+              onChange={(e) => setActualScore(e.target.value)}
+              disabled={applyAbsent && isAbsent}
+              placeholder="선택 기록에 같은 점수 적용"
+            />
+          </BulkField>
+
+          <BulkField enabled={applyAbsent} onToggle={setApplyAbsent} label="결석 표시">
+            <Select value={isAbsent ? "absent" : "present"} onChange={(e) => setIsAbsent(e.target.value === "absent")}>
+              <option value="absent">결석으로 표시</option>
+              <option value="present">결석 해제</option>
+            </Select>
+          </BulkField>
+
+          <BulkField enabled={applyPass} onToggle={setApplyPass} label="판정">
+            <Select value={passChoice} onChange={(e) => setPassChoice(e.target.value as PassKindChoice)}>
+              <option value="auto">자동 판정</option>
+              <option value="main">본시험 통과</option>
+              <option value="retest">재시험 통과</option>
+              <option value="exempt">면제</option>
+              <option value="fail">미통과</option>
+            </Select>
+          </BulkField>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={busy}>취소</Button>
+          <Button onClick={save} disabled={busy}>{busy ? "적용 중..." : "선택 항목 적용"}</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function BulkField({
+  enabled,
+  onToggle,
+  label,
+  children,
+}: {
+  enabled: boolean;
+  onToggle: (enabled: boolean) => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`rounded-xl border p-3 ${enabled ? "border-brand-100 bg-brand-50/40" : "border-gray-100 bg-gray-50"}`}>
+      <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-brand-600"
+        />
+        {label}
+      </label>
+      <div className={enabled ? "" : "pointer-events-none opacity-45"}>{children}</div>
+    </div>
+  );
+}
+
 function recordBadge(record: ScoreRecord) {
+  if (record.isAbsent) return <Badge color="gray">결석</Badge>;
   if (!record.passed) return <Badge color="red">미통과</Badge>;
   if (record.passKind === "exempt") return <Badge color="gray">면제</Badge>;
   if (record.passKind === "retest" || record.attemptType === "retest") return <Badge color="blue">재시험 통과</Badge>;
@@ -725,6 +1007,7 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
           (r) =>
             r.studentId === retestStudent.id &&
             r.status === "approved" &&
+            !r.isAbsent &&
             !r.passed &&
             r.passedOverride == null &&
             !db.retests.some(
@@ -738,7 +1021,7 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
   // 선생님이 이미 처리한 회차 (통과/면제/수동 미통과 등 직접 판정)
   const retestProcessed = retestStudent
     ? db.records
-        .filter((r) => r.studentId === retestStudent.id && r.status === "approved" && r.passedOverride != null)
+        .filter((r) => r.studentId === retestStudent.id && r.status === "approved" && !r.isAbsent && r.passedOverride != null)
         .sort(byDateDesc)
     : [];
   const retestHistory = retestStudent

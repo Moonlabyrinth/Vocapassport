@@ -19,6 +19,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
   const [bookTitle, setBookTitle] = useState("");
   const [total, setTotal] = useState<number>(20);
   const [actual, setActual] = useState<string>("");
+  const [isAbsent, setIsAbsent] = useState(false);
   const [round, setRound] = useState(1);
   const [session, setSession] = useState<number | "">("");
   const [examDate, setExamDate] = useState(todayStr());
@@ -42,6 +43,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
 
   // 실시간 미리보기
   const preview = useMemo(() => {
+    if (isAbsent) return null;
     const a = Number(actual);
     if (!actual || !total || Number.isNaN(a)) return null;
     const pct = percentOf(a, total);
@@ -49,7 +51,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
       ? a + 1e-9 >= book!.passMark!
       : threshold != null && pct + 1e-9 >= threshold;
     return { pct, passed, perfect: a >= total };
-  }, [actual, total, threshold, usePassMark, book]);
+  }, [actual, total, threshold, usePassMark, book, isAbsent]);
 
   function pickBook(id: string) {
     setBookId(id);
@@ -87,7 +89,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
     if (!classId) return alert("반을 선택하세요.");
     if (!studentId) return alert("학생을 선택하세요.");
     if (!bookTitle.trim()) return alert("책 제목을 입력/선택하세요.");
-    if (actual === "") return alert("실제 성적을 입력하세요.");
+    if (!isAbsent && actual === "") return alert("실제 성적을 입력하세요.");
     setBusy(true);
     const r = await run({
       type: "createRecord",
@@ -98,7 +100,8 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
       round,
       session: session === "" ? null : session,
       totalScore: total,
-      actualScore: Number(actual),
+      actualScore: isAbsent ? 0 : Number(actual),
+      isAbsent,
       examDate,
       photoPath,
     });
@@ -106,6 +109,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
     if (!r.ok) return alert(r.error);
     // 입력 초기화 (반/책/회독/날짜는 유지)
     setActual("");
+    setIsAbsent(false);
     setPhotoPath(null);
     if (r.needsRetest && r.recordId) {
       // 방금 만든 기록을 다시 찾아 재시험 예약 모달
@@ -203,7 +207,22 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
               value={actual}
               onChange={(e) => setActual(e.target.value)}
               placeholder="점수 입력"
+              disabled={isAbsent}
             />
+          </Field>
+          <Field label="결석 여부" hint="점수 대신 결석으로 기록합니다.">
+            <label className="flex h-[46px] items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-base text-gray-700">
+              <input
+                type="checkbox"
+                checked={isAbsent}
+                onChange={(e) => {
+                  setIsAbsent(e.target.checked);
+                  if (e.target.checked) setActual("");
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-brand-600"
+              />
+              결석
+            </label>
           </Field>
           <Field label="시험 날짜">
             <DatePicker value={examDate} onChange={setExamDate} />
@@ -218,6 +237,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
           {cutText && <Badge color="indigo">통과 컷 {cutText}</Badge>}
           {uploading && <Badge color="gray">사진 업로드 중…</Badge>}
           {photoPath && <Badge color="green">사진 첨부됨</Badge>}
+          {isAbsent && <Badge color="gray">결석으로 기록</Badge>}
           {preview && (
             <>
               <Badge color="gray">{Math.round(preview.pct * 10) / 10}%</Badge>
@@ -268,17 +288,17 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
                       <td className="py-2 pr-3 text-gray-800">{st?.name ?? "?"}</td>
                       <td className="py-2 pr-3 text-gray-600">{r.bookTitle}</td>
                       <td className="py-2 pr-3 text-gray-500">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</td>
-                      <td className="py-2 pr-3 text-gray-700">{r.actualScore}/{r.totalScore}</td>
+                      <td className="py-2 pr-3 text-gray-700">{r.isAbsent ? "결석" : `${r.actualScore}/${r.totalScore}`}</td>
                       <td className="py-2 pr-3">
-                        {r.isPerfect ? <Badge color="amber">만점</Badge> : r.passed ? <Badge color="green">통과</Badge> : <Badge color="red">미통과</Badge>}
+                        {r.isAbsent ? <Badge color="gray">결석</Badge> : r.isPerfect ? <Badge color="amber">만점</Badge> : r.passed ? <Badge color="green">통과</Badge> : <Badge color="red">미통과</Badge>}
                       </td>
                       <td className="py-2 pr-3 text-gray-400">{r.examDate.slice(5)}</td>
                       <td className="py-2">
                         <div className="flex justify-end gap-1">
-                        {!r.passed && !hasRetest && (
+                        {!r.isAbsent && !r.passed && !hasRetest && (
                           <Button size="sm" variant="soft" onClick={() => setRetestFor(r)}>재시험 예약</Button>
                         )}
-                        {!r.passed && hasRetest && <Badge color="blue">예약됨</Badge>}
+                        {!r.isAbsent && !r.passed && hasRetest && <Badge color="blue">예약됨</Badge>}
                           <Button
                             size="sm"
                             variant="danger"

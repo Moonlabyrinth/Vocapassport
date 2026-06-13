@@ -91,7 +91,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
       const periodRecords = approvedRegularRecords.filter((record) =>
         isDateInRange(record.examDate, period.startDate, period.endDate)
       );
-      averageByPeriod.set(period.key, average(periodRecords.map(convertedScore)));
+      averageByPeriod.set(period.key, average(periodRecords.filter((record) => !record.isAbsent).map(convertedScore)));
     }
 
     return reportPeriods.map((period, index) => {
@@ -105,7 +105,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
           ? approvedRegularRecords.some((record) => isDateInRange(record.examDate, previousPeriod.startDate, previousPeriod.endDate))
           : false;
         const reward = computeAchievementPeriodStats(approvedRegularRecords, period);
-        const avg = average(periodRecords.map(convertedScore));
+        const avg = average(periodRecords.filter((record) => !record.isAbsent).map(convertedScore));
 
         return {
           key: period.key,
@@ -128,10 +128,12 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
           earnedReward: reward.earnedReward,
           projectedEligible: reward.projectedEligible,
           allPassBonusEarned: reward.total >= reward.targetTests && reward.passCount >= reward.targetTests,
-          trend: periodRecords.map((record) => ({
-            label: record.examDate.slice(5).replace("-", "/"),
-            score: convertedScore(record),
-          })),
+          trend: periodRecords
+            .filter((record) => !record.isAbsent)
+            .map((record) => ({
+              label: record.examDate.slice(5).replace("-", "/"),
+              score: convertedScore(record),
+            })),
           history: [...periodRecords]
             .reverse()
             .map((record) => ({
@@ -140,7 +142,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
               date: formatKoreanDate(record.examDate),
               score: convertedScore(record),
               maxScore: 100,
-              status: record.passed ? "pass" : "retest",
+              status: record.isAbsent ? "absent" : record.passed ? "pass" : "retest",
             })),
         };
       });
@@ -153,6 +155,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
 
   const needScheduling = records.filter(
     (r) =>
+      !r.isAbsent &&
       !r.passed &&
       !db.retests.some(
         (rt) =>
@@ -161,11 +164,13 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
       )
   );
 
-  const trend = ordered.map((r) => ({
-    label: `${r.examDate.slice(5)}${r.retestNo > 0 ? "(재)" : ""}`,
-    pct: round1(percentOf(r.actualScore, r.totalScore)),
-    cut: cutPercent(r),
-  }));
+  const trend = ordered
+    .filter((r) => !r.isAbsent)
+    .map((r) => ({
+      label: `${r.examDate.slice(5)}${r.retestNo > 0 ? "(재)" : ""}`,
+      pct: round1(percentOf(r.actualScore, r.totalScore)),
+      cut: cutPercent(r),
+    }));
 
   return (
     <div className="min-h-screen pb-10">
@@ -323,9 +328,11 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                           <td className="py-2 pr-3 text-gray-500">{r.examDate.slice(5)}</td>
                           <td className="py-2 pr-3 text-gray-700">{r.bookTitle}</td>
                           <td className="py-2 pr-3 text-gray-500">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</td>
-                          <td className="py-2 pr-3 text-gray-700">{r.actualScore}/{r.totalScore}</td>
+                          <td className="py-2 pr-3 text-gray-700">{r.isAbsent ? "결석" : `${r.actualScore}/${r.totalScore}`}</td>
                           <td className="py-2">
-                            {!r.passed ? (
+                            {r.isAbsent ? (
+                              <Badge color="gray">결석</Badge>
+                            ) : !r.passed ? (
                               <Badge color="red">미통과</Badge>
                             ) : r.passKind === "exempt" ? (
                               <Badge color="gray">면제</Badge>

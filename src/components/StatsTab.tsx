@@ -13,6 +13,7 @@ import {
   computeStreaks,
   cutPercent,
   isActiveStudent,
+  isAbsent,
   isDateInRange,
   isExempt,
   percentOf,
@@ -65,7 +66,8 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
   const rewardMode = period === "achievement";
 
   // 반/전체 요약 (면제 제외)
-  const countableRecords = classRecords.filter((r) => !isExempt(r));
+  const countableRecords = classRecords.filter((r) => !isExempt(r) && !isAbsent(r));
+  const absentRecords = classRecords.filter((r) => isAbsent(r));
   const classAvg = round1(avgPercent(classRecords));
   const roundAvgs = [1, 2, 3].map((rd) => ({
     round: rd,
@@ -161,6 +163,7 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
       {/* 반/전체 요약 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Stat label="응시 수" value={countableRecords.length} accent="indigo" />
+        <Stat label="결석" value={absentRecords.length} />
         <Stat label="전체 평균" value={classAvg != null ? `${classAvg}%` : "-"} accent="green" />
         {roundAvgs.map((r) => (
           <Stat
@@ -206,6 +209,7 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
                 <tr className="text-left text-gray-400 border-b border-gray-100">
                   <th className="py-2 pr-3 font-medium">학생</th>
                   <th className="py-2 pr-3 font-medium">응시</th>
+                  <th className="py-2 pr-3 font-medium">결석</th>
                   <th className="py-2 pr-3 font-medium">평균</th>
                   <th className="py-2 pr-3 font-medium">만점</th>
                   <th className="py-2 pr-3 font-medium">통과</th>
@@ -223,8 +227,9 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
                     <tr key={s.id} className="border-b border-gray-50">
                       <td className="py-2 pr-3 font-medium text-gray-800">{s.name}</td>
                       <td className="py-2 pr-3 text-gray-600">
-                        {st.total}{rewardMode ? ` / ${achievementPeriod.targetTests}` : ""}
+                        {st.total - st.absentCount}{rewardMode ? ` / ${achievementPeriod.targetTests}` : ""}
                       </td>
+                      <td className="py-2 pr-3 text-gray-600">{st.absentCount}</td>
                       <td className="py-2 pr-3 text-gray-700">{st.avgPercent != null ? `${round1(st.avgPercent)}%` : "-"}</td>
                       <td className="py-2 pr-3">
                         <Badge color="amber">{st.perfectCount}</Badge>
@@ -301,12 +306,14 @@ function StudentDetail({
   const rewardMode = period === "achievement";
   const rewardStats = computeAchievementPeriodStats(recs, achievementPeriod);
   const st = rewardMode ? rewardStats : computeStreaks(recs);
-  const data = recs.map((r, i) => ({
-    idx: i + 1,
-    label: `${r.examDate.slice(5)}${r.retestNo > 0 ? "(재)" : ""}`,
-    pct: round1(percentOf(r.actualScore, r.totalScore)),
-    cut: cutPercent(r),
-  }));
+  const data = recs
+    .filter((r) => !isAbsent(r))
+    .map((r, i) => ({
+      idx: i + 1,
+      label: `${r.examDate.slice(5)}${r.retestNo > 0 ? "(재)" : ""}`,
+      pct: round1(percentOf(r.actualScore, r.totalScore)),
+      cut: cutPercent(r),
+    }));
 
   return (
     <Card title={`${student?.name} 상세 추이`}>
@@ -412,7 +419,7 @@ function buildTrend(records: ScoreRecord[]): {
   const data: TrendPoint[] = dates.map((date) => {
     const recs = byDate.get(date)!;
     const roundAvg = (rd: number) => {
-      const sub = recs.filter((r) => r.round === rd);
+      const sub = recs.filter((r) => r.round === rd && !isAbsent(r));
       if (!sub.length) return null;
       hasRound[rd] = true;
       return round1(avgPercent(sub));

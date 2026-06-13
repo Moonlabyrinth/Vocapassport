@@ -176,6 +176,7 @@ export function sortChrono(records: ScoreRecord[]): ScoreRecord[] {
 
 export interface StreakStats {
   total: number; // 응시 수
+  absentCount: number; // 결석 수
   perfectCount: number; // 만점 횟수
   passCount: number; // 통과 횟수
   currentPerfectStreak: number; // 현재 만점 연속
@@ -203,9 +204,14 @@ export function isExempt(r: Pick<ScoreRecord, "passKind">): boolean {
   return r.passKind === "exempt";
 }
 
+export function isAbsent(r: Pick<ScoreRecord, "isAbsent">): boolean {
+  return !!r.isAbsent;
+}
+
 export function computeStreaks(records: ScoreRecord[]): StreakStats {
   const ordered = sortChrono(records);
   let total = 0;
+  let absentCount = 0;
   let perfectCount = 0;
   let passCount = 0;
   let curPerfect = 0;
@@ -213,10 +219,17 @@ export function computeStreaks(records: ScoreRecord[]): StreakStats {
   let curPass = 0;
   let bestPass = 0;
   let percentSum = 0;
+  let scoredTotal = 0;
 
   for (const r of ordered) {
     if (isExempt(r)) continue; // 면제: 연속을 끊지 않고 통째로 건너뜀
     total++;
+    if (isAbsent(r)) {
+      absentCount++;
+      curPerfect = 0;
+      curPass = 0;
+      continue;
+    }
     if (r.isPerfect) {
       perfectCount++;
       curPerfect++;
@@ -232,17 +245,19 @@ export function computeStreaks(records: ScoreRecord[]): StreakStats {
       curPass = 0;
     }
     percentSum += percentOf(r.actualScore, r.totalScore);
+    scoredTotal++;
   }
 
   return {
     total,
+    absentCount,
     perfectCount,
     passCount,
     currentPerfectStreak: curPerfect,
     bestPerfectStreak: bestPerfect,
     currentPassStreak: curPass,
     bestPassStreak: bestPass,
-    avgPercent: total ? percentSum / total : null,
+    avgPercent: scoredTotal ? percentSum / scoredTotal : null,
   };
 }
 
@@ -287,7 +302,7 @@ export function computeAchievementPeriodStats(
 
 /** 평균 백분율 (소수1) — 면제 제외 */
 export function avgPercent(records: ScoreRecord[]): number | null {
-  const countable = records.filter((r) => !isExempt(r));
+  const countable = records.filter((r) => !isExempt(r) && !isAbsent(r));
   if (!countable.length) return null;
   const sum = countable.reduce(
     (acc, r) => acc + percentOf(r.actualScore, r.totalScore),

@@ -71,6 +71,8 @@ export interface ScoreRecord {
   session: number | null;
   totalScore: number; // 만점
   actualScore: number; // 실제성적
+  /** 결석 기록. 0점 미통과와 구분해 표시하고 평균 점수 계산에서는 제외 */
+  isAbsent?: boolean;
   examDate: string; // 시험 본 날짜 (YYYY-MM-DD)
   attemptType: AttemptType;
   /** 재시험인 경우 원본(직전) 기록 id */

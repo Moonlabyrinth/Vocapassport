@@ -13,6 +13,20 @@ import {
 } from "./types";
 import { isPassed, isPerfect, resolveThreshold, type AchievementPeriod } from "./logic";
 
+type ScoreRecordPatch = Partial<{
+  bookId: string | null;
+  totalScore: number;
+  actualScore: number;
+  isAbsent: boolean;
+  round: number;
+  session: number | null;
+  bookTitle: string;
+  examDate: string;
+  status: ScoreRecord["status"];
+  photoPath: string | null;
+  passedOverride: boolean | null;
+}>;
+
 // 순수 id 생성기 (fs 의존 없음)
 function genId(prefix = ""): string {
   const s = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -39,10 +53,12 @@ export type Action =
       session: number | null;
       totalScore: number;
       actualScore: number;
+      isAbsent?: boolean;
       examDate: string;
       photoPath?: string | null;
     }
-  | { type: "updateRecord"; id: string; patch: Partial<{ bookId: string | null; totalScore: number; actualScore: number; round: number; session: number | null; bookTitle: string; examDate: string; status: ScoreRecord["status"]; photoPath: string | null; passedOverride: boolean | null }> }
+  | { type: "updateRecord"; id: string; patch: ScoreRecordPatch }
+  | { type: "updateRecords"; ids: string[]; patch: ScoreRecordPatch }
   | { type: "deleteRecord"; id: string }
   | { type: "deleteRecords"; ids: string[] }
   | { type: "scheduleRetest"; scoreRecordId: string; scheduledAt: string }
@@ -99,6 +115,12 @@ function recompute(db: Database, r: ScoreRecord) {
     r.passMarkUsed = null;
     r.thresholdUsed = threshold;
     computedPassed = isPassed(r.actualScore, r.totalScore, threshold);
+  }
+  if (r.isAbsent) {
+    r.passed = false;
+    r.isPerfect = false;
+    r.passKind = null;
+    return;
   }
   r.passed = r.passedOverride ?? computedPassed;
   r.isPerfect = isPerfect(r.actualScore, r.totalScore);
@@ -238,7 +260,8 @@ export function applyAction(db: Database, a: Action): ActionResult {
     }
 
     case "createRecord": {
-      const err = validateScore(a.actualScore, a.totalScore);
+      const actualScore = a.isAbsent ? 0 : a.actualScore;
+      const err = validateScore(actualScore, a.totalScore);
       if (err) return { ok: false, error: err };
       const id = genId("r");
       const rec: ScoreRecord = {
@@ -250,7 +273,8 @@ export function applyAction(db: Database, a: Action): ActionResult {
         round: clampRound(a.round),
         session: a.session ?? null,
         totalScore: normScore(a.totalScore),
-        actualScore: normScore(a.actualScore),
+        actualScore: normScore(actualScore),
+        isAbsent: !!a.isAbsent,
         examDate: a.examDate,
         attemptType: "first",
         parentRecordId: null,
@@ -268,33 +292,25 @@ export function applyAction(db: Database, a: Action): ActionResult {
       };
       recompute(db, rec);
       db.records.push(rec);
-      return { ok: true, id, recordId: id, passed: rec.passed, needsRetest: !rec.passed };
+      return { ok: true, id, recordId: id, passed: rec.passed, needsRetest: !rec.passed && !rec.isAbsent };
     }
     case "updateRecord": {
       const r = db.records.find((x) => x.id === a.id);
       if (!r) return { ok: false, error: "기록을 찾을 수 없습니다." };
-      const p = a.patch;
-      if (p.bookId !== undefined) {
-        if (p.bookId && !db.books.some((b) => b.id === p.bookId)) return { ok: false, error: "책을 찾을 수 없습니다." };
-        r.bookId = p.bookId;
-      }
-      if (p.totalScore != null) r.totalScore = normScore(p.totalScore);
-      if (p.actualScore != null) r.actualScore = normScore(p.actualScore);
-      if (p.round != null) r.round = clampRound(p.round);
-      if (p.session !== undefined) r.session = p.session;
-      if (p.bookTitle != null) r.bookTitle = p.bookTitle.trim();
-      if (p.examDate != null) r.examDate = p.examDate;
-      if (p.photoPath !== undefined) r.photoPath = p.photoPath;
-      if (p.passedOverride !== undefined) r.passedOverride = p.passedOverride;
-      if (p.status != null) {
-        r.status = p.status;
-        r.approvedAt = p.status === "approved" ? now : r.approvedAt;
-      }
-      if (!r.bookTitle.trim()) return { ok: false, error: "책 제목을 입력하세요." };
-      const err = validateScore(r.actualScore, r.totalScore);
+      const err = applyScoreRecordPatch(db, r, a.patch, now);
       if (err) return { ok: false, error: err };
-      recompute(db, r);
-      return { ok: true, id: r.id, passed: r.passed, needsRetest: !r.passed };
+      return { ok: true, id: r.id, passed: r.passed, needsRetest: !r.passed && !r.isAbsent };
+    }
+    case "updateRecords": {
+      const ids = [...new Set(a.ids)].filter(Boolean);
+      if (!ids.length) return { ok: false, error: "수정할 기록을 선택하세요." };
+      const records = ids.map((id) => db.records.find((x) => x.id === id));
+      if (records.some((r) => !r)) return { ok: false, error: "일부 점수 기록을 찾을 수 없습니다." };
+      for (const r of records as ScoreRecord[]) {
+        const err = applyScoreRecordPatch(db, r, a.patch, now);
+        if (err) return { ok: false, error: err };
+      }
+      return { ok: true };
     }
     case "deleteRecord": {
       deleteScoreRecords(db, [a.id]);
@@ -543,6 +559,43 @@ function normMonthlyClassIds(classIds: string[] | null | undefined, fallbackClas
 
 function monthlyClassIdsOf(test: { classId?: string | null; classIds?: string[] | null }): string[] {
   return normMonthlyClassIds(test.classIds, test.classId);
+}
+
+function applyScoreRecordPatch(db: Database, r: ScoreRecord, p: ScoreRecordPatch, now: string): string | null {
+  const wasAbsent = !!r.isAbsent;
+  if (p.bookId !== undefined) {
+    const book = p.bookId ? db.books.find((b) => b.id === p.bookId) : null;
+    if (p.bookId && !book) return "책을 찾을 수 없습니다.";
+    if (book && book.classId !== r.classId) return "기록의 반과 다른 반의 책은 연결할 수 없습니다.";
+    r.bookId = p.bookId;
+  }
+  if (p.totalScore != null) r.totalScore = normScore(p.totalScore);
+  if (p.actualScore != null) r.actualScore = normScore(p.actualScore);
+  if (p.isAbsent !== undefined) {
+    r.isAbsent = p.isAbsent;
+    if (p.isAbsent) {
+      r.actualScore = 0;
+      r.passedOverride = false;
+      r.passKind = null;
+    } else if (wasAbsent && p.passedOverride === undefined) {
+      r.passedOverride = null;
+    }
+  }
+  if (p.round != null) r.round = clampRound(p.round);
+  if (p.session !== undefined) r.session = p.session == null ? null : Math.max(1, Math.round(p.session));
+  if (p.bookTitle != null) r.bookTitle = p.bookTitle.trim();
+  if (p.examDate != null) r.examDate = p.examDate;
+  if (p.photoPath !== undefined) r.photoPath = p.photoPath;
+  if (p.passedOverride !== undefined) r.passedOverride = p.passedOverride;
+  if (p.status != null) {
+    r.status = p.status;
+    r.approvedAt = p.status === "approved" ? now : r.approvedAt;
+  }
+  if (!r.bookTitle.trim()) return "책 제목을 입력하세요.";
+  const err = validateScore(r.actualScore, r.totalScore);
+  if (err) return err;
+  recompute(db, r);
+  return null;
 }
 
 function deleteScoreRecords(db: Database, recordIds: string[]) {

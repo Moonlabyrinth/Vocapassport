@@ -14,7 +14,7 @@ import {
   type TooltipProps,
 } from "recharts";
 
-export type StudentReportStatus = "pass" | "retest";
+export type StudentReportStatus = "pass" | "retest" | "absent";
 
 export interface StudentReportTrendPoint {
   label: string;
@@ -156,10 +156,12 @@ function formatNumber(value: number): string {
 }
 
 function StatusBadge({ status }: { status: StudentReportStatus }) {
-  const label = status === "pass" ? "통과" : "재시험 대상";
+  const label = status === "pass" ? "통과" : status === "absent" ? "결석" : "재시험 대상";
   const className =
     status === "pass"
       ? "bg-[#DEF7EC] text-[#03543F]"
+      : status === "absent"
+        ? "bg-slate-100 text-slate-500"
       : "bg-[#FDF6B2] text-[#723B10]";
 
   return (
@@ -521,12 +523,14 @@ export default function StudentReport({
                   <div>
                     <p className="text-xs font-semibold uppercase text-slate-400">백점환산</p>
                     <p className="mt-1 text-2xl font-bold tracking-tight text-[#1F2937]">
-                      {formatNumber(item.score)} <span className="text-sm font-semibold text-slate-400">/ {item.maxScore}</span>
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-500">
-                    {Math.round((item.score / item.maxScore) * 100)}%
-                  </div>
+                    {item.status === "absent" ? "결석" : <>{formatNumber(item.score)} <span className="text-sm font-semibold text-slate-400">/ {item.maxScore}</span></>}
+                  </p>
+                </div>
+                  {item.status !== "absent" && (
+                    <div className="rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-500">
+                      {Math.round((item.score / item.maxScore) * 100)}%
+                    </div>
+                  )}
                 </div>
               </motion.article>
             ))}
