@@ -10,7 +10,7 @@ export default function CreatorFooter({ className = "" }: { className?: string }
 
   return (
     <footer className={`flex justify-center ${className}`} aria-label="프로그램 제작자">
-      <div className="inline-flex items-center justify-center rounded-2xl border border-gray-100 bg-white/75 px-4 py-2.5 shadow-sm shadow-gray-200/60 opacity-80 backdrop-blur transition hover:opacity-100">
+      <div className="inline-flex items-center justify-center px-2 py-1 opacity-75 transition hover:opacity-100">
         {showLogo ? (
           <img
             src={CREATOR_LOGO_SRC}
