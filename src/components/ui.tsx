@@ -27,7 +27,7 @@ export function Card({
   );
 }
 
-type BtnVariant = "primary" | "ghost" | "danger" | "soft";
+type BtnVariant = "primary" | "ghost" | "danger" | "soft" | "navy";
 export function Button({
   children,
   onClick,
@@ -53,6 +53,7 @@ export function Button({
     ghost: "bg-transparent text-gray-600 hover:bg-gray-100",
     soft: "bg-brand-50 text-brand-700 hover:bg-brand-100",
     danger: "bg-red-50 text-red-600 hover:bg-red-100",
+    navy: "bg-lab-navy text-white hover:bg-lab-navy-deep hover:-translate-y-px shadow-lab-sm",
   };
   return (
     <button
@@ -117,8 +118,17 @@ export function Field({
 const inputCls =
   "w-full rounded-xl border border-gray-200 px-3 py-2.5 text-base focus:border-brand-600 focus:ring-2 focus:ring-brand-100 outline-none bg-white";
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${inputCls} ${props.className || ""}`} />;
+// 로그인 리디자인용 변형(골드 포커스 링, 종이톤). 기본값은 기존과 동일(하위호환).
+const inputClsLab =
+  "w-full rounded-xl border-[1.5px] border-lab-line bg-white px-3 py-3 text-[14px] text-lab-ink placeholder:text-[#b8b3a6] focus:border-lab-gold focus:outline-none focus:ring-4 focus:ring-lab-gold transition";
+
+export function Input({
+  variant = "default",
+  className = "",
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { variant?: "default" | "lab" }) {
+  const base = variant === "lab" ? inputClsLab : inputCls;
+  return <input {...props} className={`${base} ${className}`} />;
 }
 
 /**
