@@ -15,6 +15,30 @@ export default {
           600: "#4f46e5",
           700: "#4338ca",
         },
+        // 로그인/보호자 리디자인 디자인 토큰 (명세서 §2). lab- 네임스페이스로 기존 색과 충돌 방지.
+        lab: {
+          navy: "#2f4054",
+          "navy-2": "#3f566c",
+          "navy-deep": "#263443",
+          gold: "#a98249",
+          "gold-soft": "#e8ddc8",
+          paper: "#fbfaf6",
+          ink: "#1f2933",
+          muted: "#717986",
+          line: "#e3ded3",
+          green: "#6f8f78",
+          "green-soft": "#eef4ef",
+          page: "#eeece6", // 프레임 바깥 배경
+          panel: "#ebe5d8", // 우측 로그인 패널(종이톤)
+        },
+      },
+      boxShadow: {
+        lab: "0 16px 42px -24px rgba(31,41,51,.35)",
+        "lab-sm": "0 4px 16px -12px rgba(31,41,51,.25)",
+        "lab-card": "0 16px 36px -26px rgba(37,41,50,.35)",
+      },
+      ringColor: {
+        "lab-gold": "rgba(198,161,91,.13)",
       },
       fontFamily: {
         sans: [
