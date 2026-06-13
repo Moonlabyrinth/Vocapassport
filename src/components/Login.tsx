@@ -220,9 +220,13 @@ function HallOfFame({ data }: { data: LeaderboardResponse | null }) {
                   <div className="min-w-0">
                     <div className="truncate text-sm font-bold text-gray-800">
                       {entry.studentName}
+                      {entry.className && (
+                        <span className="ml-1.5 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-gray-500">
+                          {entry.className}
+                        </span>
+                      )}
                       {entry.allPassBonusEarned && <span className="ml-1 text-amber-500">All Pass</span>}
                     </div>
-                    <div className="truncate text-xs text-gray-400">{entry.className || "반 정보 없음"}</div>
                   </div>
                 </div>
                 <div className="text-right">
@@ -267,7 +271,14 @@ function Highlight({
       </div>
       {entry ? (
         <>
-          <div className="truncate text-sm font-black text-gray-800">{entry.studentName}</div>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm font-black text-gray-800">{entry.studentName}</span>
+            {entry.className && (
+              <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-bold text-current/70">
+                {entry.className}
+              </span>
+            )}
+          </div>
           <div className="mt-0.5 text-xs font-semibold text-current">{value(entry)}</div>
         </>
       ) : (
