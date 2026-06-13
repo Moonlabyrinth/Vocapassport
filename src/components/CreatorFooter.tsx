@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 const CREATOR_NAME = "LINDSAY LAB";
-const CREATOR_LOGO_SRC = "/creator-logo.png";
+const CREATOR_LOGO_SRC = "/creator-logo.png?v=20260613-clean";
 
 export default function CreatorFooter({ className = "" }: { className?: string }) {
   const [showLogo, setShowLogo] = useState(true);
