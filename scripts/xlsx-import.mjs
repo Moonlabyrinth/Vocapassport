@@ -1,5 +1,5 @@
 // 엑셀 → data/db.json 직접 생성 (반/책/절대컷/학생계정/점수/회독)
-import * as XLSX from "xlsx";
+import * as XLSX from "@e965/xlsx";
 import { readFileSync, writeFileSync, existsSync, copyFileSync } from "fs";
 import crypto from "crypto";
 import path from "path";

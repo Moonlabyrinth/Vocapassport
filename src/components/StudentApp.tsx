@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { AppStateHook, apiChangePassword, apiLogout } from "@/lib/client";
 import { Button, Card, Badge, EmptyState, Stat, Modal, Field, Input } from "./ui";
 import {
-  REWARD_DEFAULT_TEST_COUNT,
-  REWARD_PASS_GOAL,
-  computeRewardStats,
+  achievementRangeLabel,
+  computeAchievementPeriodStats,
   computeStreaks,
+  isDateInRange,
   percentOf,
   round1,
   sortChrono,
@@ -16,14 +16,49 @@ import {
   monthlyTotal,
   monthlyMaxTotal,
   monthlyPercent,
+  resolveAchievementPeriods,
+  type AchievementPeriod,
 } from "@/lib/logic";
 import { formatDateTime, relativeFromNow } from "@/lib/datetime";
 import { recordLessonLabel } from "@/lib/course";
 import { ScoreRecord } from "@/lib/types";
 import RetestScheduler from "./RetestScheduler";
+import StudentReport, { StudentReportMonth } from "./StudentReport";
+import CreatorFooter from "@/components/CreatorFooter";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+
+function formatKoreanDate(date: string): string {
+  const [, month, day] = date.split("-");
+  return `${Number(month)}월 ${Number(day)}일`;
+}
+
+function convertedScore(record: ScoreRecord): number {
+  return round1(percentOf(record.actualScore, record.totalScore)) ?? 0;
+}
+
+function average(values: number[]): number {
+  if (!values.length) return 0;
+  return round1(values.reduce((sum, value) => sum + value, 0) / values.length) ?? 0;
+}
+
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function periodsForReports(records: ScoreRecord[], periods: AchievementPeriod[]): AchievementPeriod[] {
+  const today = localDateKey();
+  const activePeriods = periods.filter(
+    (period) =>
+      isDateInRange(today, period.startDate, period.endDate) ||
+      records.some((record) => isDateInRange(record.examDate, period.startDate, period.endDate))
+  );
+  return activePeriods.length ? activePeriods : periods.slice(0, 1);
+}
 
 export default function StudentApp({ app }: { app: AppStateHook }) {
   const { db, user } = app;
@@ -43,8 +78,73 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
     })
     .filter((item): item is NonNullable<typeof item> => !!item);
   const stats = computeStreaks(records);
-  const rewardStats = computeRewardStats(records);
   const ordered = sortChrono(records);
+  const achievementPeriods = useMemo(() => resolveAchievementPeriods(db.settings), [db.settings]);
+  const wordReports = useMemo<StudentReportMonth[]>(() => {
+    const approvedRegularRecords = records.filter(
+      (record) => record.status === "approved" && record.attemptType === "first"
+    );
+    const reportPeriods = periodsForReports(approvedRegularRecords, achievementPeriods);
+    const averageByPeriod = new Map<string, number>();
+
+    for (const period of reportPeriods) {
+      const periodRecords = approvedRegularRecords.filter((record) =>
+        isDateInRange(record.examDate, period.startDate, period.endDate)
+      );
+      averageByPeriod.set(period.key, average(periodRecords.map(convertedScore)));
+    }
+
+    return reportPeriods.map((period, index) => {
+        const periodRecords = approvedRegularRecords
+          .filter((record) => isDateInRange(record.examDate, period.startDate, period.endDate))
+          .sort(
+          (a, b) => a.examDate.localeCompare(b.examDate) || a.createdAt.localeCompare(b.createdAt)
+        );
+        const previousPeriod = reportPeriods[index - 1];
+        const previousPeriodHasRecords = previousPeriod
+          ? approvedRegularRecords.some((record) => isDateInRange(record.examDate, previousPeriod.startDate, previousPeriod.endDate))
+          : false;
+        const reward = computeAchievementPeriodStats(approvedRegularRecords, period);
+        const avg = average(periodRecords.map(convertedScore));
+
+        return {
+          key: period.key,
+          label: period.label,
+          studentName: me?.name ?? "학생",
+          seasonLabel: period.seasonLabel,
+          rangeLabel: achievementRangeLabel(period),
+          passRate: reward.total ? Math.round((reward.passCount / reward.total) * 100) : 0,
+          averageScore: avg,
+          previousAverageScore: previousPeriod && previousPeriodHasRecords ? averageByPeriod.get(previousPeriod.key) ?? avg : avg,
+          targetTests: reward.targetTests,
+          passGoal: reward.passGoal,
+          totalTests: reward.total,
+          passCount: reward.passCount,
+          remainingPasses: reward.remainingPasses,
+          currentPassStreak: reward.currentPassStreak,
+          bestPassStreak: reward.bestPassStreak,
+          currentPerfectStreak: reward.currentPerfectStreak,
+          bestPerfectStreak: reward.bestPerfectStreak,
+          earnedReward: reward.earnedReward,
+          projectedEligible: reward.projectedEligible,
+          allPassBonusEarned: reward.total >= reward.targetTests && reward.passCount >= reward.targetTests,
+          trend: periodRecords.map((record) => ({
+            label: record.examDate.slice(5).replace("-", "/"),
+            score: convertedScore(record),
+          })),
+          history: [...periodRecords]
+            .reverse()
+            .map((record) => ({
+              id: record.id,
+              title: `${record.bookTitle} · ${recordLessonLabel(record)}`,
+              date: formatKoreanDate(record.examDate),
+              score: convertedScore(record),
+              maxScore: 100,
+              status: record.passed ? "pass" : "retest",
+            })),
+        };
+      });
+  }, [achievementPeriods, me?.name, records]);
 
   // 재시험 관련 분류
   const scheduledRetests = db.retests
@@ -116,6 +216,14 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
 
         {activeTab === "word" && (
           <>
+            {wordReports.length > 0 && (
+              <StudentReport
+                reports={wordReports}
+                embedded
+                className="rounded-3xl border border-gray-100 bg-[#F9FAFB] px-3 py-4 shadow-sm"
+              />
+            )}
+
             {/* 요약 */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Stat label="응시" value={stats.total} accent="indigo" />
@@ -123,18 +231,6 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
               <Stat label="통과" value={stats.passCount} accent="green" sub={`연속 ${stats.currentPassStreak}`} />
               <Stat label="만점" value={stats.perfectCount} accent="amber" sub={`연속 ${stats.currentPerfectStreak}`} />
             </div>
-
-            <Card title="여름학기 성취">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Stat label="정규 시험" value={`${rewardStats.total}/${REWARD_DEFAULT_TEST_COUNT}`} accent="indigo" />
-                <Stat label="통과" value={`${rewardStats.passCount}/${REWARD_PASS_GOAL}`} accent="green" sub={rewardStats.earnedReward ? "성취 달성" : `남은 통과 ${rewardStats.remainingPasses}`} />
-                <Stat label="연속 통과" value={rewardStats.currentPassStreak} accent="green" sub={`최고 ${rewardStats.bestPassStreak}`} />
-                <Stat label="연속 만점" value={rewardStats.currentPerfectStreak} accent="amber" sub={`최고 ${rewardStats.bestPerfectStreak}`} />
-              </div>
-              <p className="text-xs text-gray-400 mt-3">
-                여름학기 성취는 2026.06.10 이후 정규 시험만 계산합니다. 재시험 기록은 성취 기준 횟수에서 제외됩니다.
-              </p>
-            </Card>
 
             {/* 재시험 필요 */}
             {needScheduling.length > 0 && (
@@ -265,11 +361,14 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                   const pct = round1(monthlyPercent(res.scores, t));
                   return (
                     <div key={t.id} className="rounded-xl border border-gray-100 p-3">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
                         <div className="text-lg font-semibold text-gray-800">
                           {t.name} <span className="text-sm font-normal text-gray-400">· {t.date}</span>
                         </div>
-                        <Badge color="indigo" size="lg">총점 {round1(total)} / {max} ({pct}%)</Badge>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge color="indigo" size="lg">총점 {round1(total)} / {max}</Badge>
+                          <Badge color="green" size="lg">백점환산 {pct}점</Badge>
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {t.sections.map((s) => (
@@ -286,6 +385,8 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
           </Card>
         )}
       </main>
+
+      <CreatorFooter className="px-4 pb-6" />
 
       <Modal open={!!retestFor} onClose={() => setRetestFor(null)} title="재시험 일정 예약">
         {retestFor && (

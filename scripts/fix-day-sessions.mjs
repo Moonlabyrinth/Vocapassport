@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import * as XLSX from "@e965/xlsx";
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 
@@ -175,4 +175,3 @@ if (!dryRun) {
   console.log(`updated ${DB_PATH}`);
   console.log(`backup ${BACKUP_PATH}`);
 }
-

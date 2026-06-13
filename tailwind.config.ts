@@ -16,6 +16,16 @@ export default {
           700: "#4338ca",
         },
       },
+      fontFamily: {
+        sans: [
+          "var(--font-noto-sans-kr)",
+          "Noto Sans KR",
+          "Malgun Gothic",
+          "맑은 고딕",
+          "sans-serif",
+        ],
+        serif: ["var(--font-noto-serif-kr)", "Noto Serif KR", "Georgia", "serif"],
+      },
     },
   },
   plugins: [],

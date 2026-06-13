@@ -1,15 +1,24 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AppStateHook, apiAdmin } from "@/lib/client";
-import { Button, Card, Field, Input, Select, Badge, EmptyState, Modal } from "./ui";
+import { Button, Card, Field, Input, Select, Badge, EmptyState, Modal, DisclosureButton } from "./ui";
 import DatePicker from "./DatePicker";
 import { ScheduleType, PassKindChoice, ScoreRecord } from "@/lib/types";
-import { isActiveStudent, percentOf, round1 } from "@/lib/logic";
-import { recordLessonLabel } from "@/lib/course";
+import {
+  ACHIEVEMENT_PERIODS,
+  achievementRangeLabel,
+  isActiveStudent,
+  percentOf,
+  resolveAchievementPeriods,
+  round1,
+  type AchievementPeriod,
+} from "@/lib/logic";
+import { maxSessionsForBook, recordLessonLabel, sessionDayRange } from "@/lib/course";
 import { NeedsRetestRow, RetestHistoryRow } from "./RetestTab";
 
 interface IssuedCred { name: string; loginId: string; password: string }
+const RECORD_PAGE_SIZE = 30;
 
 export default function ManageTab({ app }: { app: AppStateHook }) {
   const { db, run } = app;
@@ -86,10 +95,144 @@ export default function ManageTab({ app }: { app: AppStateHook }) {
         )}
       </Card>
 
-      <ScoreRecordManager app={app} />
+      <AchievementPeriodSettings app={app} />
 
       {cls && <ClassDetail key={cls.id} app={app} classId={cls.id} />}
+
+      <ScoreRecordManager app={app} />
     </div>
+  );
+}
+
+function AchievementPeriodSettings({ app }: { app: AppStateHook }) {
+  const { db, run } = app;
+  const savedPeriods = useMemo(() => resolveAchievementPeriods(db.settings), [db.settings]);
+  const [drafts, setDrafts] = useState<AchievementPeriod[]>(() => savedPeriods.map((period) => ({ ...period })));
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    setDrafts(savedPeriods.map((period) => ({ ...period })));
+  }, [savedPeriods]);
+
+  function updatePeriod(index: number, patch: Partial<AchievementPeriod>) {
+    setDrafts((prev) => prev.map((period, i) => (i === index ? { ...period, ...patch } : period)));
+    setMessage(null);
+  }
+
+  function resetDefault() {
+    setDrafts(ACHIEVEMENT_PERIODS.map((period) => ({ ...period })));
+    setMessage(null);
+  }
+
+  async function save() {
+    setBusy(true);
+    const result = await run({ type: "updateAchievementPeriods", periods: drafts });
+    setBusy(false);
+    if (!result.ok) {
+      setMessage(result.error || "저장하지 못했습니다.");
+      return;
+    }
+    setMessage("성취 평가 기간을 저장했습니다.");
+  }
+
+  return (
+    <Card
+      title="성취 평가 기간 설정"
+      right={
+        <div className="flex items-center gap-2">
+          <Badge color="indigo">{savedPeriods.length}개 구간</Badge>
+          <DisclosureButton expanded={expanded} onClick={() => setExpanded((value) => !value)} />
+        </div>
+      }
+    >
+      {!expanded ? (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">
+            현재 성취 평가 기간입니다. 일정이 밀리면 열어서 개강일과 종강일을 수정하세요.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {savedPeriods.map((period) => (
+              <Badge key={period.key} color="gray">
+                {period.label} {achievementRangeLabel(period)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="mb-3 text-sm text-gray-500">
+            방학, 휴강, 보강으로 일정이 밀리면 여기서 개강일과 종강일을 수정하세요.
+            학생 리포트와 통계 화면이 이 날짜 기준으로 다시 계산됩니다.
+          </p>
+          <div className="space-y-3">
+            {drafts.map((period, index) => (
+              <div key={period.key} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="font-semibold text-gray-800">{period.label}</div>
+                    <div className="text-sm text-gray-400">{achievementRangeLabel(period)}</div>
+                  </div>
+                  <Badge color={period.passGoal >= period.targetTests ? "amber" : "green"}>
+                    {period.targetTests}회 중 {period.passGoal}회 통과
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+                  <Field label="구간명">
+                    <Input
+                      value={period.label}
+                      onChange={(e) => updatePeriod(index, { label: e.target.value })}
+                      placeholder="예: 1개월차"
+                    />
+                  </Field>
+                  <Field label="개강일">
+                    <DatePicker
+                      value={period.startDate}
+                      onChange={(value) => updatePeriod(index, { startDate: value })}
+                      placeholder="YYYY-MM-DD"
+                    />
+                  </Field>
+                  <Field label="종강일">
+                    <DatePicker
+                      value={period.endDate}
+                      onChange={(value) => updatePeriod(index, { endDate: value })}
+                      placeholder="YYYY-MM-DD"
+                    />
+                  </Field>
+                  <Field label="시험 횟수">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={period.targetTests}
+                      onChange={(e) => updatePeriod(index, { targetTests: Number(e.target.value) })}
+                    />
+                  </Field>
+                  <Field label="상품 기준">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={period.targetTests}
+                      value={period.passGoal}
+                      onChange={(e) => updatePeriod(index, { passGoal: Number(e.target.value) })}
+                    />
+                  </Field>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className={`text-sm ${message?.includes("저장했습니다") ? "text-green-600" : "text-red-600"}`}>
+              {message}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={resetDefault} disabled={busy}>기본값</Button>
+              <Button onClick={save} disabled={busy}>{busy ? "저장 중..." : "저장"}</Button>
+            </div>
+          </div>
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -103,6 +246,9 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
   const [endDate, setEndDate] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(RECORD_PAGE_SIZE);
+  const [editingRecord, setEditingRecord] = useState<ScoreRecord | null>(null);
 
   const students = useMemo(
     () =>
@@ -138,7 +284,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
       .sort((a, b) => b.examDate.localeCompare(a.examDate) || b.createdAt.localeCompare(a.createdAt));
   }, [db.records, db.students, db.classes, classId, studentId, roundFilter, startDate, endDate, query]);
 
-  const visibleRecords = records.slice(0, 200);
+  const visibleRecords = records.slice(0, visibleLimit);
   const visibleIds = visibleRecords.map((r) => r.id);
   const selectedVisibleIds = [...selectedIds].filter((id) => visibleIds.includes(id));
   const allVisibleSelected = visibleIds.length > 0 && selectedVisibleIds.length === visibleIds.length;
@@ -147,6 +293,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
     setClassId(id);
     setStudentId("");
     setSelectedIds(new Set());
+    setVisibleLimit(RECORD_PAGE_SIZE);
   }
 
   function toggleRecord(id: string, checked: boolean) {
@@ -191,14 +338,29 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
   }
 
   return (
+    <>
     <Card
-      title="전체 성적 검색/삭제"
+      title="전체 성적 검색/수정/삭제"
       right={
-        <Button size="sm" variant="danger" disabled={busy || !selectedVisibleIds.length} onClick={deleteSelected}>
-          선택 삭제
-        </Button>
+        <div className="flex items-center gap-1">
+          {expanded && (
+            <Button size="sm" variant="danger" disabled={busy || !selectedVisibleIds.length} onClick={deleteSelected}>
+              선택 삭제
+            </Button>
+          )}
+          <DisclosureButton expanded={expanded} onClick={() => setExpanded((v) => !v)} />
+        </div>
       }
     >
+      {!expanded ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-gray-500">
+            입력한 점수, 날짜, 책, 회독/회차, 판정을 찾아 수정하거나 삭제할 때 열어 사용하세요.
+          </p>
+          <Badge color={db.records.length ? "indigo" : "gray"}>전체 기록 {db.records.length}건</Badge>
+        </div>
+      ) : (
+        <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-3">
         <Field label="반">
           <Select value={classId} onChange={(e) => setClassFilter(e.target.value)}>
@@ -209,7 +371,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
           </Select>
         </Field>
         <Field label="학생">
-          <Select value={studentId} onChange={(e) => { setStudentId(e.target.value); setSelectedIds(new Set()); }}>
+          <Select value={studentId} onChange={(e) => { setStudentId(e.target.value); setSelectedIds(new Set()); setVisibleLimit(RECORD_PAGE_SIZE); }}>
             <option value="">전체 학생</option>
             {students.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
@@ -217,7 +379,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
           </Select>
         </Field>
         <Field label="회독">
-          <Select value={roundFilter} onChange={(e) => { setRoundFilter(Number(e.target.value)); setSelectedIds(new Set()); }}>
+          <Select value={roundFilter} onChange={(e) => { setRoundFilter(Number(e.target.value)); setSelectedIds(new Set()); setVisibleLimit(RECORD_PAGE_SIZE); }}>
             <option value={0}>전체 회독</option>
             <option value={1}>1회독</option>
             <option value={2}>2회독</option>
@@ -225,13 +387,13 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
           </Select>
         </Field>
         <Field label="시작일">
-          <DatePicker value={startDate} onChange={(v) => { setStartDate(v); setSelectedIds(new Set()); }} placeholder="처음부터" />
+          <DatePicker value={startDate} onChange={(v) => { setStartDate(v); setSelectedIds(new Set()); setVisibleLimit(RECORD_PAGE_SIZE); }} placeholder="처음부터" />
         </Field>
         <Field label="종료일">
-          <DatePicker value={endDate} onChange={(v) => { setEndDate(v); setSelectedIds(new Set()); }} placeholder="현재까지" />
+          <DatePicker value={endDate} onChange={(v) => { setEndDate(v); setSelectedIds(new Set()); setVisibleLimit(RECORD_PAGE_SIZE); }} placeholder="현재까지" />
         </Field>
         <Field label="검색어">
-          <Input value={query} onChange={(e) => { setQuery(e.target.value); setSelectedIds(new Set()); }} placeholder="학생, 책, 날짜" />
+          <Input value={query} onChange={(e) => { setQuery(e.target.value); setSelectedIds(new Set()); setVisibleLimit(RECORD_PAGE_SIZE); }} placeholder="학생, 책, 날짜" />
         </Field>
       </div>
 
@@ -252,6 +414,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
             setStartDate("");
             setEndDate("");
             setSelectedIds(new Set());
+            setVisibleLimit(RECORD_PAGE_SIZE);
           }}
         >
           필터 초기화
@@ -311,7 +474,10 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
                       {recordBadge(r)}
                     </td>
                     <td className="py-2 text-right">
-                      <Button size="sm" variant="danger" disabled={busy} onClick={() => deleteOne(r)}>삭제</Button>
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditingRecord(r)}>수정</Button>
+                        <Button size="sm" variant="danger" disabled={busy} onClick={() => deleteOne(r)}>삭제</Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -320,7 +486,199 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
           </table>
         </div>
       )}
+      {records.length > visibleRecords.length && (
+        <div className="mt-3 flex justify-center">
+          <Button size="sm" variant="soft" onClick={() => setVisibleLimit((n) => n + RECORD_PAGE_SIZE)}>
+            더 보기 ({visibleRecords.length}/{records.length})
+          </Button>
+        </div>
+      )}
+        </>
+      )}
     </Card>
+    {editingRecord && (
+      <EditScoreRecordModal app={app} record={editingRecord} onClose={() => setEditingRecord(null)} />
+    )}
+    </>
+  );
+}
+
+function passKindChoiceOf(record: ScoreRecord): PassKindChoice {
+  if (record.passedOverride == null) return "auto";
+  if (record.passedOverride === false) return "fail";
+  return record.passKind ?? "main";
+}
+
+function EditScoreRecordModal({
+  app,
+  record,
+  onClose,
+}: {
+  app: AppStateHook;
+  record: ScoreRecord;
+  onClose: () => void;
+}) {
+  const { db, run } = app;
+  const student = db.students.find((s) => s.id === record.studentId);
+  const cls = db.classes.find((c) => c.id === record.classId);
+  const books = db.books.filter((b) => b.classId === record.classId);
+  const matchedBook = record.bookId
+    ? books.find((b) => b.id === record.bookId)
+    : books.find((b) => b.title === record.bookTitle);
+
+  const [bookId, setBookId] = useState(matchedBook?.id ?? "");
+  const [bookTitle, setBookTitle] = useState(record.bookTitle);
+  const [round, setRound] = useState(record.round);
+  const [session, setSession] = useState<number | "">(record.session ?? "");
+  const [totalScore, setTotalScore] = useState(String(record.totalScore));
+  const [actualScore, setActualScore] = useState(String(record.actualScore));
+  const [examDate, setExamDate] = useState(record.examDate);
+  const [passChoice, setPassChoice] = useState<PassKindChoice>(passKindChoiceOf(record));
+  const [busy, setBusy] = useState(false);
+
+  const sessionOptions = bookTitle
+    ? Array.from({ length: maxSessionsForBook(bookTitle) }, (_, i) => i + 1)
+    : [];
+  const selectedBook = bookId ? books.find((b) => b.id === bookId) : null;
+  const previewActual = Number(actualScore);
+  const previewTotal = Number(totalScore);
+  const previewPercent =
+    Number.isFinite(previewActual) && Number.isFinite(previewTotal) && previewTotal > 0
+      ? round1(percentOf(previewActual, previewTotal))
+      : null;
+
+  function pickBook(id: string) {
+    setBookId(id);
+    const b = books.find((x) => x.id === id);
+    if (b) {
+      setBookTitle(b.title);
+      setTotalScore(String(b.defaultTotalScore));
+      setSession("");
+    }
+  }
+
+  async function save() {
+    if (!bookTitle.trim()) return alert("책 제목을 입력하세요.");
+    if (!totalScore || Number(totalScore) <= 0) return alert("만점을 입력하세요.");
+    if (actualScore === "") return alert("실제 성적을 입력하세요.");
+    if (Number(actualScore) > Number(totalScore)) return alert("실제 성적은 만점보다 클 수 없습니다.");
+
+    setBusy(true);
+    const updateResult = await run({
+      type: "updateRecord",
+      id: record.id,
+      patch: {
+        bookId: bookId || null,
+        bookTitle: bookTitle.trim(),
+        round,
+        session: session === "" ? null : Number(session),
+        totalScore: Number(totalScore),
+        actualScore: Number(actualScore),
+        examDate,
+      },
+    });
+    if (!updateResult.ok) {
+      setBusy(false);
+      return alert(updateResult.error);
+    }
+
+    const passResult = await run({
+      type: "setRecordPassKind",
+      recordId: record.id,
+      kind: passChoice,
+    });
+    setBusy(false);
+    if (!passResult.ok) return alert(passResult.error);
+    onClose();
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} title="성적 기록 수정" width="max-w-2xl">
+      <div className="space-y-4">
+        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+          <div className="font-semibold text-gray-800">{student?.name ?? "학생 정보 없음"}</div>
+          <div className="mt-0.5">{cls?.name ?? "반 정보 없음"} · 기존 {recordLessonLabel(record)}</div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="시험 날짜">
+            <DatePicker value={examDate} onChange={setExamDate} />
+          </Field>
+
+          <Field label="등록 책 선택">
+            <Select value={bookId} onChange={(e) => (e.target.value ? pickBook(e.target.value) : setBookId(""))}>
+              <option value="">직접 입력</option>
+              {books.map((book) => (
+                <option key={book.id} value={book.id}>{book.title}</option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="책 제목">
+            <Input
+              value={bookTitle}
+              onChange={(e) => {
+                setBookTitle(e.target.value);
+                setBookId("");
+              }}
+              placeholder="책 제목"
+            />
+          </Field>
+
+          <Field label="회독">
+            <Select value={round} onChange={(e) => setRound(Number(e.target.value))}>
+              <option value={1}>1회독</option>
+              <option value={2}>2회독</option>
+              <option value={3}>3회독</option>
+            </Select>
+          </Field>
+
+          <Field label="회차(Day)" hint={bookTitle ? "책 제목 기준으로 Day 범위를 다시 계산합니다." : undefined}>
+            <Select
+              value={session}
+              onChange={(e) => setSession(e.target.value ? Number(e.target.value) : "")}
+              disabled={!bookTitle}
+            >
+              <option value="">선택 안 함</option>
+              {sessionOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}회차 · {sessionDayRange(n, bookTitle)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="만점" hint={selectedBook?.passMark != null ? `등록 책 통과 컷 ${selectedBook.passMark}점` : undefined}>
+            <Input type="number" min={1} step="0.1" value={totalScore} onChange={(e) => setTotalScore(e.target.value)} />
+          </Field>
+
+          <Field label="실제 성적">
+            <Input type="number" min={0} step="0.1" value={actualScore} onChange={(e) => setActualScore(e.target.value)} />
+          </Field>
+
+          <Field label="판정">
+            <Select value={passChoice} onChange={(e) => setPassChoice(e.target.value as PassKindChoice)}>
+              <option value="auto">자동 판정</option>
+              <option value="main">본시험 통과</option>
+              <option value="retest">재시험 통과</option>
+              <option value="exempt">면제</option>
+              <option value="fail">미통과</option>
+            </Select>
+          </Field>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {previewPercent != null && <Badge color="gray">백점환산 {previewPercent}점</Badge>}
+          {passChoice === "auto" && <Badge color="indigo">저장 후 자동 재계산</Badge>}
+          {passChoice !== "auto" && <Badge color="amber">선생님 수동 판정</Badge>}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={busy}>취소</Button>
+          <Button onClick={save} disabled={busy}>{busy ? "저장 중..." : "저장"}</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

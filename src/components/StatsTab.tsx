@@ -1,40 +1,53 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AppStateHook } from "@/lib/client";
 import { Card, Field, Select, Badge, EmptyState, Stat } from "./ui";
 import DatePicker from "./DatePicker";
 import { ScoreRecord } from "@/lib/types";
 import {
-  REWARD_DEFAULT_TEST_COUNT,
-  REWARD_PASS_GOAL,
-  REWARD_START_DATE,
+  ACHIEVEMENT_PERIODS,
+  achievementRangeLabel,
   avgPercent,
-  computeRewardStats,
+  computeAchievementPeriodStats,
   computeStreaks,
   cutPercent,
   isActiveStudent,
+  isDateInRange,
   isExempt,
   percentOf,
+  resolveAchievementPeriods,
   round1,
   sortChrono,
+  type AchievementPeriod,
 } from "@/lib/logic";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
 
 const SPRING_END_DATE = "2026-06-05";
+const DEFAULT_ACHIEVEMENT_PERIOD = ACHIEVEMENT_PERIODS[0];
 
-type StatsPeriod = "reward" | "spring" | "all" | "custom";
+type StatsPeriod = "achievement" | "spring" | "all" | "custom";
 
 export default function StatsTab({ app }: { app: AppStateHook }) {
   const { db } = app;
   const [classId, setClassId] = useState("");
   const [studentId, setStudentId] = useState("");
   const [roundFilter, setRoundFilter] = useState<number | 0>(0); // 0 = 전체
-  const [period, setPeriod] = useState<StatsPeriod>("reward");
-  const [customStart, setCustomStart] = useState(REWARD_START_DATE);
+  const [period, setPeriod] = useState<StatsPeriod>("achievement");
+  const [achievementPeriodKey, setAchievementPeriodKey] = useState(DEFAULT_ACHIEVEMENT_PERIOD?.key ?? "");
+  const [customStart, setCustomStart] = useState(DEFAULT_ACHIEVEMENT_PERIOD?.startDate ?? "");
   const [customEnd, setCustomEnd] = useState("");
+  const achievementPeriods = useMemo(() => resolveAchievementPeriods(db.settings), [db.settings]);
+  const achievementPeriod =
+    achievementPeriods.find((item) => item.key === achievementPeriodKey) ?? achievementPeriods[0] ?? DEFAULT_ACHIEVEMENT_PERIOD;
+
+  useEffect(() => {
+    if (!achievementPeriods.some((item) => item.key === achievementPeriodKey)) {
+      setAchievementPeriodKey(achievementPeriods[0]?.key ?? "");
+    }
+  }, [achievementPeriodKey, achievementPeriods]);
 
   const classRecords = useMemo(
     () =>
@@ -43,13 +56,13 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
           r.status === "approved" &&
           (!classId || r.classId === classId) &&
           (roundFilter === 0 || r.round === roundFilter) &&
-          recordMatchesPeriod(r, period, customStart, customEnd)
+          recordMatchesPeriod(r, period, achievementPeriod, customStart, customEnd)
       ),
-    [db.records, classId, roundFilter, period, customStart, customEnd]
+    [db.records, classId, roundFilter, period, achievementPeriod, customStart, customEnd]
   );
 
   const students = db.students.filter((s) => isActiveStudent(s) && (!classId || s.classId === classId));
-  const rewardMode = period === "reward";
+  const rewardMode = period === "achievement";
 
   // 반/전체 요약 (면제 제외)
   const countableRecords = classRecords.filter((r) => !isExempt(r));
@@ -69,12 +82,23 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <Field label="통계 기간">
             <Select value={period} onChange={(e) => setPeriod(e.target.value as StatsPeriod)}>
-              <option value="reward">여름학기 성취 (6/10 이후)</option>
+              <option value="achievement">여름학기 성취 평가</option>
               <option value="spring">봄학기 (6/5까지)</option>
               <option value="all">전체 기간</option>
               <option value="custom">직접 지정</option>
             </Select>
           </Field>
+          {rewardMode && (
+            <Field label="성취 구간">
+              <Select value={achievementPeriodKey} onChange={(e) => setAchievementPeriodKey(e.target.value)}>
+                {achievementPeriods.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label} ({achievementRangeLabel(item)})
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="반">
             <Select
               value={classId}
@@ -107,7 +131,7 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
           </Field>
           <Field label="기준">
             <div className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-600 bg-gray-50">
-              {periodLabel(period, customStart, customEnd)}
+              {periodLabel(period, achievementPeriod, customStart, customEnd)}
             </div>
           </Field>
         </div>
@@ -124,12 +148,12 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
       </Card>
 
       {rewardMode && (
-        <Card title="여름학기 성취 기준">
+        <Card title="여름학기 성취 평가 기준">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Stat label="시작일" value="6/10" accent="indigo" />
-            <Stat label="대상 시험" value={`${REWARD_DEFAULT_TEST_COUNT}회`} sub="정규 시험만" />
-            <Stat label="성취 기준" value={`${REWARD_PASS_GOAL}회`} accent="green" sub="통과 이상" />
-            <Stat label="재시험" value="제외" sub="성취 횟수 계산" />
+            <Stat label="시즌" value="3개월" accent="indigo" sub="1개월씩 집계" />
+            <Stat label="현재 구간" value={achievementPeriod.label} sub={achievementRangeLabel(achievementPeriod)} />
+            <Stat label="성취 기준" value={`${achievementPeriod.passGoal}/${achievementPeriod.targetTests}회`} accent="green" sub="정규 시험 통과" />
+            <Stat label="특별 상품" value="All Pass" accent="amber" sub={`${achievementPeriod.targetTests}회 전부 통과`} />
           </div>
         </Card>
       )}
@@ -193,20 +217,20 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
               <tbody>
                 {students.map((s) => {
                   const recs = classRecords.filter((r) => r.studentId === s.id);
-                  const rewardStats = computeRewardStats(recs);
+                  const rewardStats = computeAchievementPeriodStats(recs, achievementPeriod);
                   const st = rewardMode ? rewardStats : computeStreaks(recs);
                   return (
                     <tr key={s.id} className="border-b border-gray-50">
                       <td className="py-2 pr-3 font-medium text-gray-800">{s.name}</td>
                       <td className="py-2 pr-3 text-gray-600">
-                        {st.total}{rewardMode ? ` / ${REWARD_DEFAULT_TEST_COUNT}` : ""}
+                        {st.total}{rewardMode ? ` / ${achievementPeriod.targetTests}` : ""}
                       </td>
                       <td className="py-2 pr-3 text-gray-700">{st.avgPercent != null ? `${round1(st.avgPercent)}%` : "-"}</td>
                       <td className="py-2 pr-3">
                         <Badge color="amber">{st.perfectCount}</Badge>
                       </td>
                       <td className="py-2 pr-3">
-                        <Badge color="green">{st.passCount}{rewardMode ? ` / ${REWARD_PASS_GOAL}` : ""}</Badge>
+                        <Badge color="green">{st.passCount}{rewardMode ? ` / ${achievementPeriod.passGoal}` : ""}</Badge>
                       </td>
                       <td className="py-2 pr-3">
                         <span className="font-semibold text-amber-600">{st.currentPerfectStreak}</span>
@@ -234,6 +258,7 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
           classId={classId}
           roundFilter={roundFilter}
           period={period}
+          achievementPeriod={achievementPeriod}
           customStart={customStart}
           customEnd={customEnd}
         />
@@ -248,6 +273,7 @@ function StudentDetail({
   classId,
   roundFilter,
   period,
+  achievementPeriod,
   customStart,
   customEnd,
 }: {
@@ -256,6 +282,7 @@ function StudentDetail({
   classId: string;
   roundFilter: number;
   period: StatsPeriod;
+  achievementPeriod: AchievementPeriod;
   customStart: string;
   customEnd: string;
 }) {
@@ -268,11 +295,11 @@ function StudentDetail({
         r.status === "approved" &&
         (!classId || r.classId === classId) &&
         (roundFilter === 0 || r.round === roundFilter) &&
-        recordMatchesPeriod(r, period, customStart, customEnd)
+        recordMatchesPeriod(r, period, achievementPeriod, customStart, customEnd)
     )
   );
-  const rewardMode = period === "reward";
-  const rewardStats = computeRewardStats(recs);
+  const rewardMode = period === "achievement";
+  const rewardStats = computeAchievementPeriodStats(recs, achievementPeriod);
   const st = rewardMode ? rewardStats : computeStreaks(recs);
   const data = recs.map((r, i) => ({
     idx: i + 1,
@@ -284,10 +311,10 @@ function StudentDetail({
   return (
     <Card title={`${student?.name} 상세 추이`}>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
-        <Stat label="응시" value={rewardMode ? `${st.total}/${REWARD_DEFAULT_TEST_COUNT}` : st.total} />
+        <Stat label="응시" value={rewardMode ? `${st.total}/${achievementPeriod.targetTests}` : st.total} />
         <Stat label="평균" value={st.avgPercent != null ? `${round1(st.avgPercent)}%` : "-"} accent="green" />
         <Stat label="만점 횟수" value={st.perfectCount} accent="amber" sub={`최고연속 ${st.bestPerfectStreak}`} />
-        <Stat label="통과 횟수" value={rewardMode ? `${st.passCount}/${REWARD_PASS_GOAL}` : st.passCount} accent="green" sub={`최고연속 ${st.bestPassStreak}`} />
+        <Stat label="통과 횟수" value={rewardMode ? `${st.passCount}/${achievementPeriod.passGoal}` : st.passCount} accent="green" sub={`최고연속 ${st.bestPassStreak}`} />
         <Stat label={rewardMode ? "성취" : "현재 연속"} value={rewardMode ? rewardText(rewardStats) : `${st.currentPassStreak}`} accent="indigo" sub={rewardMode ? `연속통과 ${st.currentPassStreak}` : `만점연속 ${st.currentPerfectStreak}`} />
       </div>
       {data.length === 0 ? (
@@ -321,11 +348,12 @@ interface TrendPoint {
 function recordMatchesPeriod(
   record: ScoreRecord,
   period: StatsPeriod,
+  achievementPeriod: AchievementPeriod,
   customStart: string,
   customEnd: string
 ): boolean {
-  if (period === "reward") {
-    return record.examDate >= REWARD_START_DATE && record.attemptType === "first";
+  if (period === "achievement") {
+    return record.attemptType === "first" && isDateInRange(record.examDate, achievementPeriod.startDate, achievementPeriod.endDate);
   }
   if (period === "spring") {
     return record.examDate <= SPRING_END_DATE;
@@ -336,8 +364,15 @@ function recordMatchesPeriod(
   return true;
 }
 
-function periodLabel(period: StatsPeriod, customStart: string, customEnd: string): string {
-  if (period === "reward") return "여름학기 · 2026.06.10 이후 · 정규 시험만";
+function periodLabel(
+  period: StatsPeriod,
+  achievementPeriod: AchievementPeriod,
+  customStart: string,
+  customEnd: string
+): string {
+  if (period === "achievement") {
+    return `${achievementPeriod.seasonLabel} · ${achievementPeriod.label} · ${achievementRangeLabel(achievementPeriod)} · 정규 시험만`;
+  }
   if (period === "spring") return "2026.06.05까지 · 기존 봄학기";
   if (period === "custom") {
     const start = customStart || "처음";
@@ -347,13 +382,17 @@ function periodLabel(period: StatsPeriod, customStart: string, customEnd: string
   return "전체 기록";
 }
 
-function rewardText(st: ReturnType<typeof computeRewardStats>): string {
+function rewardText(st: ReturnType<typeof computeAchievementPeriodStats>): string {
+  if (st.total >= st.targetTests && st.passCount >= st.targetTests) return "All Pass";
   if (st.earnedReward) return "달성";
   if (!st.projectedEligible) return "어려움";
   return `${st.remainingPasses}회 남음`;
 }
 
-function rewardBadge(st: ReturnType<typeof computeRewardStats>) {
+function rewardBadge(st: ReturnType<typeof computeAchievementPeriodStats>) {
+  if (st.total >= st.targetTests && st.passCount >= st.targetTests) {
+    return <Badge color="amber">All Pass 특별 상품</Badge>;
+  }
   if (st.earnedReward) return <Badge color="green">성취 달성</Badge>;
   if (!st.projectedEligible) return <Badge color="red">달성 어려움</Badge>;
   return <Badge color="indigo">통과 {st.remainingPasses}회 남음</Badge>;

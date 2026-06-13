@@ -8,6 +8,7 @@ import StatsTab from "@/components/StatsTab";
 import ManageTab from "@/components/ManageTab";
 import MonthlyTab from "@/components/MonthlyTab";
 import { Button, Modal, Field, Input } from "@/components/ui";
+import CreatorFooter from "@/components/CreatorFooter";
 
 type Tab = "score" | "retest" | "stats" | "monthly" | "manage";
 
@@ -31,7 +32,7 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
           <div className="flex items-center gap-2">
             <span className="text-2xl">📚</span>
             <div>
-              <h1 className="font-bold text-gray-800 leading-tight">단어시험 관리</h1>
+              <h1 className="font-serif font-bold text-gray-800 leading-tight">통합 시험 관리</h1>
               <p className="text-xs text-gray-400">선생님 화면</p>
             </div>
           </div>
@@ -72,6 +73,8 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
         {tab === "monthly" && <MonthlyTab app={app} />}
         {tab === "manage" && <ManageTab app={app} />}
       </main>
+
+      <CreatorFooter className="px-4 pb-6" />
 
       <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 z-30">
         <div className="grid grid-cols-5">

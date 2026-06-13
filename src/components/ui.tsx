@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 export function Card({
   children,
@@ -62,6 +63,36 @@ export function Button({
     >
       {children}
     </button>
+  );
+}
+
+export function DisclosureButton({
+  expanded,
+  onClick,
+  disabled,
+  openLabel = "열기",
+  closeLabel = "접기",
+}: {
+  expanded: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  openLabel?: string;
+  closeLabel?: string;
+}) {
+  return (
+    <Button
+      size="sm"
+      variant={expanded ? "ghost" : "soft"}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      {expanded ? (
+        <ChevronDown className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      )}
+      {expanded ? closeLabel : openLabel}
+    </Button>
   );
 }
 

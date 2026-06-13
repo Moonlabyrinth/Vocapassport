@@ -283,6 +283,10 @@ function ScoreGrid({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
   function rowTotal(sid: string): number {
     return test.sections.reduce((sum, sec) => sum + (Number(draft[sid]?.[sec.key]) || 0), 0);
   }
+  function rowConvertedScore(sid: string): number | null {
+    const max = monthlyMaxTotal(test);
+    return max > 0 ? round1((rowTotal(sid) / max) * 100) : null;
+  }
 
   async function save() {
     setBusy(true);
@@ -319,7 +323,7 @@ function ScoreGrid({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
                 {test.sections.map((s) => (
                   <th key={s.key} className="py-2 px-2 font-medium text-center">{s.label}<div className="text-[10px] text-gray-300">/{s.maxScore}</div></th>
                 ))}
-                <th className="py-2 pl-3 font-medium text-center">총점<div className="text-[10px] text-gray-300">/{monthlyMaxTotal(test)}</div></th>
+                <th className="py-2 pl-3 font-medium text-center">총점<div className="text-[10px] text-gray-300">/{monthlyMaxTotal(test)} · 백점환산</div></th>
               </tr>
             </thead>
             <tbody>
@@ -336,7 +340,10 @@ function ScoreGrid({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
                       />
                     </td>
                   ))}
-                  <td className="py-1.5 pl-3 text-center font-semibold text-brand-700">{round1(rowTotal(s.id))}</td>
+                  <td className="py-1.5 pl-3 text-center font-semibold text-brand-700">
+                    <div>{round1(rowTotal(s.id))} / {monthlyMaxTotal(test)}</div>
+                    <div className="text-xs font-medium text-gray-400">백점환산 {rowConvertedScore(s.id) ?? "-"}점</div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -374,7 +381,7 @@ function MonthlyStats({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
   const pctAvg = round1(avg(results.map((r) => monthlyPercent(r.scores, test))));
 
   return (
-    <Card title="먼슬리 통계 (단어시험과 분리)">
+    <Card title="먼슬리 통계">
       <div className="mb-3 max-w-xs">
         <Field label="반">
           <Select value={classId} onChange={(e) => setClassId(e.target.value)} disabled={availableClasses.length <= 1}>
@@ -386,7 +393,7 @@ function MonthlyStats({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <Stat label="응시" value={results.length} accent="indigo" />
         <Stat label="평균 총점" value={totalAvg != null ? `${totalAvg}` : "-"} accent="green" sub={`만점 ${monthlyMaxTotal(test)}`} />
-        <Stat label="평균 %" value={pctAvg != null ? `${pctAvg}%` : "-"} accent="green" />
+        <Stat label="평균 백점환산" value={pctAvg != null ? `${pctAvg}점` : "-"} accent="green" />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -412,7 +419,7 @@ function MonthlyStats({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
   );
 }
 
-/** 먼슬리 추이 (테스트별 총점 % — 반 평균 또는 학생) */
+/** 먼슬리 추이 (테스트별 백점환산 — 반 평균 또는 학생) */
 function TrendCard({ app }: { app: AppStateHook }) {
   const { db } = app;
   const tests = [...db.monthlyTests].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
@@ -442,7 +449,7 @@ function TrendCard({ app }: { app: AppStateHook }) {
   if (tests.length === 0) return null;
 
   return (
-    <Card title="먼슬리 추이 (총점 %)">
+    <Card title="먼슬리 추이 (백점환산)">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label="반">
           <Select value={classId} onChange={(e) => { setClassId(e.target.value); setStudentId(""); }}>
@@ -462,9 +469,9 @@ function TrendCard({ app }: { app: AppStateHook }) {
           <LineChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#eef0f4" />
             <XAxis dataKey="name" fontSize={12} tickMargin={6} />
-            <YAxis domain={[0, 100]} fontSize={12} unit="%" />
-            <Tooltip formatter={(v: number) => `${v}%`} />
-            <Line type="monotone" dataKey="pct" name="총점%" stroke="#7c3aed" strokeWidth={2} connectNulls dot={{ r: 3 }} />
+            <YAxis domain={[0, 100]} fontSize={12} unit="점" />
+            <Tooltip formatter={(v: number) => `${v}점`} />
+            <Line type="monotone" dataKey="pct" name="백점환산" stroke="#7c3aed" strokeWidth={2} connectNulls dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>

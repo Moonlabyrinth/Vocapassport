@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_KR } from "next/font/google";
+import { Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
 import "./globals.css";
 
 const notoSansKr = Noto_Sans_KR({
@@ -9,9 +9,16 @@ const notoSansKr = Noto_Sans_KR({
   display: "swap",
 });
 
+const notoSerifKr = Noto_Serif_KR({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "900"],
+  variable: "--font-noto-serif-kr",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "단어시험 관리",
-  description: "단어 시험 점수·재시험·통계 관리 프로그램",
+  title: "통합 시험 관리",
+  description: "단어 시험과 먼슬리 성적을 함께 관리하는 프로그램",
 };
 
 export const viewport: Viewport = {
@@ -25,7 +32,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body className={notoSansKr.variable}>{children}</body>
+      <body className={`${notoSansKr.variable} ${notoSerifKr.variable}`}>{children}</body>
     </html>
   );
 }

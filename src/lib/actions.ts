@@ -11,7 +11,7 @@ import {
   PassKindChoice,
   MonthlySection,
 } from "./types";
-import { isPassed, isPerfect, resolveThreshold } from "./logic";
+import { isPassed, isPerfect, resolveThreshold, type AchievementPeriod } from "./logic";
 
 // 순수 id 생성기 (fs 의존 없음)
 function genId(prefix = ""): string {
@@ -42,7 +42,7 @@ export type Action =
       examDate: string;
       photoPath?: string | null;
     }
-  | { type: "updateRecord"; id: string; patch: Partial<{ totalScore: number; actualScore: number; round: number; session: number | null; bookTitle: string; examDate: string; status: ScoreRecord["status"]; photoPath: string | null; passedOverride: boolean | null }> }
+  | { type: "updateRecord"; id: string; patch: Partial<{ bookId: string | null; totalScore: number; actualScore: number; round: number; session: number | null; bookTitle: string; examDate: string; status: ScoreRecord["status"]; photoPath: string | null; passedOverride: boolean | null }> }
   | { type: "deleteRecord"; id: string }
   | { type: "deleteRecords"; ids: string[] }
   | { type: "scheduleRetest"; scoreRecordId: string; scheduledAt: string }
@@ -56,6 +56,7 @@ export type Action =
   | { type: "updateMonthlyTest"; id: string; patch: Partial<{ name: string; date: string; classId: string | null; classIds: string[] | null; sections: MonthlySection[] }> }
   | { type: "deleteMonthlyTest"; id: string }
   | { type: "setMonthlyResults"; monthlyTestId: string; entries: { studentId: string; scores: Record<string, number> }[] }
+  | { type: "updateAchievementPeriods"; periods: AchievementPeriod[] }
   | {
       type: "completeRetest";
       retestId: string;
@@ -273,6 +274,10 @@ export function applyAction(db: Database, a: Action): ActionResult {
       const r = db.records.find((x) => x.id === a.id);
       if (!r) return { ok: false, error: "기록을 찾을 수 없습니다." };
       const p = a.patch;
+      if (p.bookId !== undefined) {
+        if (p.bookId && !db.books.some((b) => b.id === p.bookId)) return { ok: false, error: "책을 찾을 수 없습니다." };
+        r.bookId = p.bookId;
+      }
       if (p.totalScore != null) r.totalScore = normScore(p.totalScore);
       if (p.actualScore != null) r.actualScore = normScore(p.actualScore);
       if (p.round != null) r.round = clampRound(p.round);
@@ -285,6 +290,7 @@ export function applyAction(db: Database, a: Action): ActionResult {
         r.status = p.status;
         r.approvedAt = p.status === "approved" ? now : r.approvedAt;
       }
+      if (!r.bookTitle.trim()) return { ok: false, error: "책 제목을 입력하세요." };
       const err = validateScore(r.actualScore, r.totalScore);
       if (err) return { ok: false, error: err };
       recompute(db, r);
@@ -298,6 +304,13 @@ export function applyAction(db: Database, a: Action): ActionResult {
       const ids = [...new Set(a.ids)].filter(Boolean);
       if (!ids.length) return { ok: false, error: "삭제할 기록을 선택하세요." };
       deleteScoreRecords(db, ids);
+      return { ok: true };
+    }
+
+    case "updateAchievementPeriods": {
+      const result = normAchievementPeriods(a.periods);
+      if (!result.ok) return { ok: false, error: result.error };
+      db.settings.achievementPeriods = result.periods;
       return { ok: true };
     }
 
@@ -562,6 +575,32 @@ function normSections(sections: MonthlySection[]): MonthlySection[] {
     out.push({ key, label, maxScore: Math.max(1, normScore(s.maxScore || 0)) });
   }
   return out;
+}
+
+function normAchievementPeriods(periods: AchievementPeriod[]): { ok: true; periods: AchievementPeriod[] } | { ok: false; error: string } {
+  const out: AchievementPeriod[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < periods.length; i++) {
+    const p = periods[i];
+    const label = (p.label || "").trim();
+    const seasonLabel = (p.seasonLabel || "여름학기 성취 평가").trim();
+    const startDate = (p.startDate || "").trim();
+    const endDate = (p.endDate || "").trim();
+    const targetTests = Math.max(1, Math.round(Number(p.targetTests) || 0));
+    const passGoal = Math.max(0, Math.round(Number(p.passGoal) || 0));
+    if (!label) return { ok: false, error: `${i + 1}번째 구간 이름을 입력하세요.` };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return { ok: false, error: `${label}의 시작일/종료일을 YYYY-MM-DD 형식으로 입력하세요.` };
+    }
+    if (startDate > endDate) return { ok: false, error: `${label}의 종료일이 시작일보다 빠릅니다.` };
+    if (passGoal > targetTests) return { ok: false, error: `${label}의 통과 기준은 시험 횟수보다 클 수 없습니다.` };
+    let key = (p.key || `period-${i + 1}`).trim();
+    while (seen.has(key)) key = `${key}_`;
+    seen.add(key);
+    out.push({ key, seasonLabel, label, startDate, endDate, targetTests, passGoal });
+  }
+  if (out.length === 0) return { ok: false, error: "성취 평가 구간을 1개 이상 입력하세요." };
+  return { ok: true, periods: out };
 }
 
 function clampPct(n: number): number {

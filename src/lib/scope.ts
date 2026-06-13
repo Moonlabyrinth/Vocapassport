@@ -1,6 +1,6 @@
 // 역할별 데이터 스코핑 + 민감정보 제거 (순수 함수)
 
-import { Database, Student, SafeStudent } from "./types";
+import { Database, Student, SafeStudent, Settings } from "./types";
 
 /** 학생에서 비밀번호 해시/솔트 제거 (loginId 는 유지 — 선생님이 배포에 필요) */
 export function sanitizeStudent(s: Student): SafeStudent {
@@ -10,12 +10,18 @@ export function sanitizeStudent(s: Student): SafeStudent {
   return rest;
 }
 
+function publicSettings(settings: Settings | undefined): Settings {
+  return {
+    achievementPeriods: settings?.achievementPeriods,
+  };
+}
+
 /** 선생님용: 전체 데이터 (비밀번호 필드만 제거) */
 export function teacherView(db: Database): Database {
   return {
     ...db,
     students: db.students.map(sanitizeStudent) as unknown as Student[],
-    settings: {}, // 선생님 비번 해시 등은 내보내지 않음
+    settings: publicSettings(db.settings), // 선생님 비번 해시 등은 내보내지 않음
   };
 }
 
@@ -31,7 +37,7 @@ export function studentView(db: Database, studentId: string): Database {
       retests: [],
       monthlyTests: [],
       monthlyResults: [],
-      settings: {},
+      settings: publicSettings(db.settings),
     };
   }
   const myClass = db.classes.find((c) => c.id === me.classId);
@@ -46,6 +52,6 @@ export function studentView(db: Database, studentId: string): Database {
     retests: db.retests.filter((r) => r.studentId === studentId),
     monthlyTests: db.monthlyTests.filter((t) => myTestIds.has(t.id)),
     monthlyResults: myMonthlyResults,
-    settings: {},
+    settings: publicSettings(db.settings),
   };
 }

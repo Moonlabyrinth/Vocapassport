@@ -49,12 +49,89 @@ export const REWARD_START_DATE = "2026-06-10";
 export const REWARD_DEFAULT_TEST_COUNT = 11;
 export const REWARD_PASS_GOAL = 9;
 
+export interface AchievementPeriod {
+  key: string;
+  seasonLabel: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  targetTests: number;
+  passGoal: number;
+}
+
+export const ACHIEVEMENT_PERIODS: AchievementPeriod[] = [
+  {
+    key: "2026-summer-1",
+    seasonLabel: "여름학기 성취 평가",
+    label: "1개월차",
+    startDate: "2026-06-08",
+    endDate: "2026-07-03",
+    targetTests: REWARD_DEFAULT_TEST_COUNT,
+    passGoal: REWARD_PASS_GOAL,
+  },
+  {
+    key: "2026-summer-2",
+    seasonLabel: "여름학기 성취 평가",
+    label: "2개월차",
+    startDate: "2026-07-06",
+    endDate: "2026-08-03",
+    targetTests: REWARD_DEFAULT_TEST_COUNT,
+    passGoal: REWARD_PASS_GOAL,
+  },
+  {
+    key: "2026-summer-3",
+    seasonLabel: "여름학기 성취 평가",
+    label: "3개월차",
+    startDate: "2026-08-05",
+    endDate: "2026-08-31",
+    targetTests: REWARD_DEFAULT_TEST_COUNT,
+    passGoal: REWARD_PASS_GOAL,
+  },
+];
+
+export function resolveAchievementPeriods(settings?: { achievementPeriods?: AchievementPeriod[] | null }): AchievementPeriod[] {
+  const periods = settings?.achievementPeriods
+    ?.filter((period) =>
+      period.key &&
+      period.label &&
+      period.startDate &&
+      period.endDate &&
+      period.startDate <= period.endDate &&
+      period.targetTests > 0 &&
+      period.passGoal >= 0 &&
+      period.passGoal <= period.targetTests
+    )
+    .map((period) => ({ ...period }));
+  return periods?.length ? periods : ACHIEVEMENT_PERIODS.map((period) => ({ ...period }));
+}
+
+export function isDateInRange(date: string, startDate: string, endDate: string): boolean {
+  return date >= startDate && date <= endDate;
+}
+
+export function achievementPeriodForDate(date: string): AchievementPeriod | null {
+  return ACHIEVEMENT_PERIODS.find((period) => isDateInRange(date, period.startDate, period.endDate)) ?? null;
+}
+
+export function achievementRangeLabel(period: AchievementPeriod): string {
+  return `${shortDateLabel(period.startDate)}~${shortDateLabel(period.endDate)}`;
+}
+
+function shortDateLabel(date: string): string {
+  const [, month, day] = date.split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
 export function isActiveStudent(student: Pick<Student, "status">): boolean {
   return student.status !== "withdrawn";
 }
 
 export function isRewardRecord(record: ScoreRecord): boolean {
   return record.examDate >= REWARD_START_DATE && record.attemptType === "first";
+}
+
+export function isAchievementPeriodRecord(record: ScoreRecord, period: AchievementPeriod): boolean {
+  return record.attemptType === "first" && isDateInRange(record.examDate, period.startDate, period.endDate);
 }
 
 /** 적용할 통과 컷(%) — 책별 컷 우선, 없으면 반 컷 */
@@ -186,6 +263,25 @@ export function computeRewardStats(
     remainingPasses,
     projectedEligible: base.passCount + remainingTests >= passGoal,
     earnedReward: base.passCount >= passGoal,
+  };
+}
+
+export function computeAchievementPeriodStats(
+  records: ScoreRecord[],
+  period: AchievementPeriod
+): RewardStats {
+  const periodRecords = records.filter((record) => isAchievementPeriodRecord(record, period));
+  const base = computeStreaks(periodRecords);
+  const remainingTests = Math.max(0, period.targetTests - base.total);
+  const remainingPasses = Math.max(0, period.passGoal - base.passCount);
+  return {
+    ...base,
+    targetTests: period.targetTests,
+    passGoal: period.passGoal,
+    remainingTests,
+    remainingPasses,
+    projectedEligible: base.passCount + remainingTests >= period.passGoal,
+    earnedReward: base.passCount >= period.passGoal,
   };
 }
 

@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import * as XLSX from "@e965/xlsx";
 import { readFileSync } from "fs";
 
 const FILE = "C:\\Users\\LJ\\Downloads\\2026 M1 단어 시험 관리(봄+여름학기).xlsx";

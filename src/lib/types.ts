@@ -146,6 +146,16 @@ export interface Settings {
   /** 선생님 비밀번호 해시/솔트 (서버 전용) */
   teacherPasswordHash?: string;
   teacherPasswordSalt?: string;
+  /** 성취 평가 기간 설정 (클라이언트 공개 가능) */
+  achievementPeriods?: {
+    key: string;
+    seasonLabel: string;
+    label: string;
+    startDate: string;
+    endDate: string;
+    targetTests: number;
+    passGoal: number;
+  }[];
 }
 
 /** 전체 DB 스키마 (JSON 파일) */
