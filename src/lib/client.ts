@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Database, emptyDatabase } from "./types";
 import { Action, ActionResult } from "./actions";
 
-export type Role = "teacher" | "student";
+// guardian(보호자)은 STEP 1에서 로그인 UI 탭으로만 사용. 서버 인증은 STEP 2.
+export type Role = "teacher" | "student" | "guardian";
 
 export interface CurrentUser {
   id: string;

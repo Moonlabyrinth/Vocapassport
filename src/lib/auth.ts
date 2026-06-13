@@ -8,7 +8,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Database } from "./types";
 import { Action } from "./actions";
 
-export type Role = "teacher" | "student";
+// guardian(보호자)은 STEP 1에서 로그인 UI 탭으로만 노출. 서버 인증·세션은 STEP 2에서 추가.
+export type Role = "teacher" | "student" | "guardian";
 
 export interface Session {
   role: Role;
