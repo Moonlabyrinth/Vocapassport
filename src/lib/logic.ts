@@ -157,6 +157,55 @@ export function defaultPeriodForView(
   return periods.find((p) => isDateInRange(today, p.startDate, p.endDate)) ?? periods[periods.length - 1];
 }
 
+// ===================== 학기(봄/여름) 구분 — 보호자/학생 조회용 =====================
+export interface Season {
+  key: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
+/** 학기 구분(성취평가 구간과 별개, 단순 기간). 봄=3월~6/7, 여름=6/8~8월 */
+export const SEASONS: Season[] = [
+  { key: "spring", label: "봄학기", startDate: "2026-03-01", endDate: "2026-06-07" },
+  { key: "summer", label: "여름학기", startDate: "2026-06-08", endDate: "2026-08-31" },
+];
+
+function rangeHasRecords(records: ScoreRecord[], startDate: string, endDate: string): boolean {
+  return records.some((r) => r.attemptType === "first" && isDateInRange(r.examDate, startDate, endDate));
+}
+
+/** 기록이 있거나 오늘이 속한 학기만 (없으면 첫 학기) */
+export function seasonsWithData(seasons: Season[], records: ScoreRecord[], today: string): Season[] {
+  const list = seasons.filter(
+    (s) => rangeHasRecords(records, s.startDate, s.endDate) || isDateInRange(today, s.startDate, s.endDate)
+  );
+  return list.length ? list : seasons.slice(0, 1);
+}
+
+/** 기본 선택 학기: 기록 있는 가장 최근 → 오늘이 속한 학기 → 마지막 */
+export function defaultSeason(seasons: Season[], records: ScoreRecord[], today: string): Season | null {
+  if (!seasons.length) return null;
+  const withRecords = seasons.filter((s) => rangeHasRecords(records, s.startDate, s.endDate));
+  if (withRecords.length) return [...withRecords].sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
+  return seasons.find((s) => isDateInRange(today, s.startDate, s.endDate)) ?? seasons[seasons.length - 1];
+}
+
+/** 기간 내 기록이 있는 달 목록 (YYYY-MM, "M월") — 학기 안 월 드롭다운용 */
+export function monthsWithData(
+  records: ScoreRecord[],
+  startDate: string,
+  endDate: string
+): { key: string; label: string }[] {
+  const set = new Set<string>();
+  for (const r of records) {
+    if (r.attemptType !== "first") continue;
+    if (!isDateInRange(r.examDate, startDate, endDate)) continue;
+    set.add(r.examDate.slice(0, 7));
+  }
+  return [...set].sort().map((ym) => ({ key: ym, label: `${Number(ym.slice(5, 7))}월` }));
+}
+
 export function achievementRangeLabel(period: AchievementPeriod): string {
   return `${shortDateLabel(period.startDate)}~${shortDateLabel(period.endDate)}`;
 }

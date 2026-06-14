@@ -5,18 +5,18 @@ import { AppStateHook, apiLogout } from "@/lib/client";
 import { Card, EmptyState } from "./ui";
 import CreatorFooter from "@/components/CreatorFooter";
 import {
-  achievementRangeLabel,
   avgPercent,
   computeGrowthDelta,
   cutPercent,
-  defaultPeriodForView,
+  defaultSeason,
   isAbsent,
   isDateInRange,
   isExempt,
+  monthsWithData,
   percentOf,
-  periodsWithData,
-  resolveAchievementPeriods,
   round1,
+  SEASONS,
+  seasonsWithData,
   sortChrono,
 } from "@/lib/logic";
 import {
@@ -30,33 +30,57 @@ function localDateKey(date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+function rangeText(start: string, end: string): string {
+  const f = (d: string) => {
+    const [, m, day] = d.split("-");
+    return `${Number(m)}/${Number(day)}`;
+  };
+  return `${f(start)}~${f(end)}`;
+}
+
 export default function GuardianApp({ app }: { app: AppStateHook }) {
   const { db } = app;
   const child = db.students[0];
   const myClass = db.classes[0];
 
-  const periods = useMemo(() => resolveAchievementPeriods(db.settings), [db.settings]);
   const firstRecords = useMemo(
     () => db.records.filter((r) => r.status === "approved" && r.attemptType === "first"),
     [db.records]
   );
   const today = localDateKey();
-  const cycles = useMemo(() => periodsWithData(periods, firstRecords, today), [periods, firstRecords, today]);
 
-  // 선택된 구간(봄학기/여름…). 기본은 기록이 있는 가장 최근 구간.
-  const [cycleKey, setCycleKey] = useState<string>("");
+  // 학기 탭(봄/여름) — 기록 있는 학기만. 기본은 기록 있는 가장 최근 학기.
+  const seasonTabs = useMemo(() => seasonsWithData(SEASONS, firstRecords, today), [firstRecords, today]);
+  const [seasonKey, setSeasonKey] = useState<string>("");
+  const [month, setMonth] = useState<string>("all"); // "all" | "YYYY-MM"
   useEffect(() => {
-    if (!cycles.some((p) => p.key === cycleKey)) {
-      setCycleKey(defaultPeriodForView(periods, firstRecords, today)?.key ?? cycles[0]?.key ?? "");
+    if (!seasonTabs.some((s) => s.key === seasonKey)) {
+      setSeasonKey(defaultSeason(SEASONS, firstRecords, today)?.key ?? seasonTabs[0]?.key ?? "");
+      setMonth("all");
     }
-  }, [cycles, periods, firstRecords, today, cycleKey]);
-  const period = cycles.find((p) => p.key === cycleKey) ?? cycles[0] ?? null;
+  }, [seasonTabs, firstRecords, today, seasonKey]);
+  const season = seasonTabs.find((s) => s.key === seasonKey) ?? seasonTabs[0] ?? null;
+
+  // 선택 학기 안의 월(기록 있는 달) 드롭다운
+  const months = useMemo(
+    () => (season ? monthsWithData(firstRecords, season.startDate, season.endDate) : []),
+    [firstRecords, season]
+  );
+  useEffect(() => {
+    if (month !== "all" && !months.some((m) => m.key === month)) setMonth("all");
+  }, [months, month]);
+
+  // 현재 조회 라벨(전체=학기명, 아니면 N월)
+  const scopeLabel = month === "all" ? season?.label ?? "이번 학기" : `${Number(month.slice(5, 7))}월`;
 
   const data = useMemo(() => {
     const periodRecords = sortChrono(
-      firstRecords.filter((r) =>
-        period ? isDateInRange(r.examDate, period.startDate, period.endDate) : false
-      )
+      firstRecords.filter((r) => {
+        if (!season) return false;
+        if (!isDateInRange(r.examDate, season.startDate, season.endDate)) return false;
+        if (month !== "all" && r.examDate.slice(0, 7) !== month) return false;
+        return true;
+      })
     );
     const countable = periodRecords.filter((r) => !isAbsent(r) && !isExempt(r));
     const passCount = countable.filter((r) => r.passed).length;
@@ -85,7 +109,7 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
       chart,
       records,
     };
-  }, [firstRecords, period]);
+  }, [firstRecords, season, month]);
 
   async function logout() {
     await apiLogout();
@@ -95,10 +119,10 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
   const hasData = data.attemptCount > 0;
   const headline =
     !hasData
-      ? `${child?.name ?? "자녀"} 학생, 이번 달을 시작해 볼까요`
+      ? `${child?.name ?? "자녀"} 학생, 아직 이 기간 기록이 없어요`
       : data.growthDelta && data.growthDelta > 0
       ? `${child?.name ?? "자녀"} 학생, 꾸준히 성장하고 있어요`
-      : `${child?.name ?? "자녀"} 학생, 이번 달 잘 따라오고 있어요`;
+      : `${child?.name ?? "자녀"} 학생, 잘 따라오고 있어요`;
 
   return (
     <div className="min-h-screen bg-lab-page px-4 pb-12 pt-6 sm:px-6">
@@ -130,7 +154,7 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
           <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-lab-gold">보호자 리포트</div>
           <h1 className="mt-2 font-serif text-[24px] font-bold leading-snug text-lab-navy">{headline}</h1>
           <div className="mt-1.5 text-[13px] text-lab-muted">
-            {period?.label ?? "이번 달"} · {period ? achievementRangeLabel(period) : "기간 집계 중"} · 단어시험
+            {scopeLabel} · {season ? rangeText(season.startDate, season.endDate) : "기간 집계 중"} · 단어시험
             {myClass?.name && (
               <span className="ml-1.5 rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-bold text-lab-navy">
                 {myClass.name}
@@ -139,34 +163,54 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
           </div>
         </div>
 
-        {/* 학기/구간 선택 (봄학기 · 여름 …) */}
-        {cycles.length > 1 && (
-          <div className="mb-4 flex gap-1 overflow-x-auto rounded-full border border-lab-line bg-lab-paper p-1 shadow-lab-sm">
-            {cycles.map((c) => {
-              const on = c.key === period?.key;
-              return (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => setCycleKey(c.key)}
-                  className={`min-w-[88px] flex-1 shrink-0 rounded-full px-3 py-2 text-[13px] font-bold transition ${
-                    on ? "bg-lab-navy text-white shadow-lab-sm" : "text-lab-muted hover:text-lab-navy"
-                  }`}
-                >
-                  {c.label}
-                </button>
-              );
-            })}
+        {/* 학기 탭(봄/여름) + 월 드롭다운 */}
+        {(seasonTabs.length > 1 || months.length > 1) && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {seasonTabs.length > 1 && (
+              <div className="flex gap-1 rounded-full border border-lab-line bg-lab-paper p-1 shadow-lab-sm">
+                {seasonTabs.map((s) => {
+                  const on = s.key === season?.key;
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => {
+                        setSeasonKey(s.key);
+                        setMonth("all");
+                      }}
+                      className={`min-w-[84px] rounded-full px-4 py-2 text-[13px] font-bold transition ${
+                        on ? "bg-lab-navy text-white shadow-lab-sm" : "text-lab-muted hover:text-lab-navy"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {months.length > 1 && (
+              <select
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                aria-label="월 선택"
+                className="rounded-full border border-lab-line bg-lab-paper px-3.5 py-2 text-[13px] font-bold text-lab-navy shadow-lab-sm outline-none focus:border-lab-gold"
+              >
+                <option value="all">전체 ({season?.label ?? "학기"})</option>
+                {months.map((m) => (
+                  <option key={m.key} value={m.key}>{m.label}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
         {/* 요약 3카드 */}
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <SummaryCard accent="#2f4054" label={`${period?.label ?? "이번 달"} 평균`} value={data.avg != null ? `${data.avg}` : "-"} unit="점"
+          <SummaryCard accent="#2f4054" label={`${scopeLabel} 평균`} value={data.avg != null ? `${data.avg}` : "-"} unit="점"
             note={hasData ? `${data.attemptCount}회 응시 기준` : "응시 기록 없음"} />
           <SummaryCard accent="#6f8f78" label="통과 현황" value={`${data.passCount}`} unit={`/ ${data.attemptCount}회`}
             note={data.retryCount > 0 ? `재시험 ${data.retryCount}회` : hasData ? "전부 통과 중" : "응시 기록 없음"} />
-          <SummaryCard accent="#a98249" label={`${period?.label ?? "이번 달"} 성장`}
+          <SummaryCard accent="#a98249" label={`${scopeLabel} 성장`}
             value={data.growthDelta != null && data.growthDelta > 0 ? `+${data.growthDelta}` : data.growthDelta != null ? `${data.growthDelta}` : "-"}
             unit="점"
             note={data.growthDelta != null && data.growthDelta > 0 ? "초반 대비 상승" : "2회 이상 응시 시 집계"}
