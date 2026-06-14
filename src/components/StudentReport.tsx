@@ -185,7 +185,7 @@ function CircularProgress({ value }: { value: number }) {
           cy="56"
           r={radius}
           fill="none"
-          stroke="#EEF2FF"
+          stroke="#e8edf3"
           strokeWidth="10"
         />
         <motion.circle
@@ -193,7 +193,7 @@ function CircularProgress({ value }: { value: number }) {
           cy="56"
           r={radius}
           fill="none"
-          stroke="#4F46E5"
+          stroke="#2f4054"
           strokeLinecap="round"
           strokeWidth="10"
           strokeDasharray={circumference}
@@ -216,7 +216,7 @@ function TrendTooltip({ active, payload, label }: TooltipProps<number, string>) 
   if (typeof score !== "number") return null;
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-white/95 px-3 py-2 text-sm shadow-lg shadow-slate-200/60 backdrop-blur">
+    <div className="rounded-xl border border-slate-100 bg-lab-paper/95 px-3 py-2 text-sm shadow-lg shadow-slate-200/60 backdrop-blur">
       <div className="text-xs font-medium text-slate-400">{label}</div>
       <div className="mt-0.5 font-semibold text-[#1F2937]">{formatNumber(score)} / 100</div>
     </div>
@@ -314,7 +314,7 @@ export default function StudentReport({
   const Root: React.ElementType = embedded ? "section" : "main";
 
   return (
-    <Root className={`${embedded ? "text-[#1F2937]" : "min-h-screen bg-[#F9FAFB] px-4 py-6 text-[#1F2937]"} ${className}`}>
+    <Root className={`${embedded ? "text-lab-ink" : "min-h-screen bg-lab-page px-4 py-6 text-lab-ink"} ${className}`}>
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -332,12 +332,12 @@ export default function StudentReport({
                 {seasonLabel}{rangeLabel}
               </p>
             </div>
-            <div className="rounded-full border border-indigo-100 bg-white p-2 text-[#4F46E5] shadow-sm">
+            <div className="rounded-full border border-lab-line bg-lab-paper p-2 text-lab-gold shadow-lab-sm">
               <Award className="h-5 w-5" aria-hidden="true" />
             </div>
           </div>
 
-          <div className="flex gap-1 overflow-x-auto rounded-full border border-slate-200 bg-white p-1 shadow-sm shadow-slate-200/60">
+          <div className="flex gap-1 overflow-x-auto rounded-full border border-slate-200 bg-lab-paper p-1 shadow-sm shadow-slate-200/60">
             {reports.map((month) => {
               const active = month.key === selectedMonth;
               return (
@@ -347,7 +347,7 @@ export default function StudentReport({
                   onClick={() => setSelectedMonth(month.key)}
                   className={`min-w-24 flex-1 shrink-0 rounded-full px-3 py-2 text-sm font-semibold transition-all ${
                     active
-                      ? "bg-[#4F46E5] text-white shadow-sm"
+                      ? "bg-[#2f4054] text-white shadow-sm"
                       : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                   }`}
                 >
@@ -361,11 +361,11 @@ export default function StudentReport({
 
         <motion.section
           variants={itemVariants}
-          className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-[0_18px_44px_rgba(79,70,229,0.10)]"
+          className="rounded-2xl border border-lab-line bg-lab-paper p-4 shadow-[0_18px_44px_rgba(31,41,51,0.10)]"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-[#4F46E5]">보카패스포트 성취</p>
+              <p className="text-sm font-bold text-[#2f4054]">보카패스포트 성취</p>
               <div className="mt-2 flex items-end gap-2">
                 <span className="text-5xl font-black tracking-tight text-[#1F2937]">{passCount}</span>
                 <span className="pb-2 text-lg font-bold text-slate-400">/ {targetTests}회</span>
@@ -379,7 +379,7 @@ export default function StudentReport({
                 allPassBonusEarned || earnedReward
                   ? "bg-[#DEF7EC] text-[#03543F]"
                   : projectedEligible
-                    ? "bg-indigo-50 text-[#4F46E5]"
+                    ? "bg-brand-50 text-[#2f4054]"
                     : "bg-red-50 text-red-700"
               }`}
             >
@@ -390,7 +390,7 @@ export default function StudentReport({
 
           <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-100">
             <motion.div
-              className="h-full rounded-full bg-[#4F46E5]"
+              className="h-full rounded-full bg-[#2f4054]"
               initial={{ width: 0 }}
               animate={{ width: `${goalProgress}%` }}
               transition={{ duration: 0.7, ease: "easeOut" }}
@@ -414,7 +414,7 @@ export default function StudentReport({
         </motion.section>
 
         <motion.section variants={itemVariants} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+          <div className="rounded-2xl border border-slate-100 bg-lab-paper p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-500">통과율</p>
@@ -431,7 +431,7 @@ export default function StudentReport({
             </p>
           </div>
 
-          <div className="flex rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+          <div className="flex rounded-2xl border border-slate-100 bg-lab-paper p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
             <div className="flex flex-1 flex-col justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-500">평균 백점환산</p>
@@ -452,14 +452,14 @@ export default function StudentReport({
 
         <motion.section
           variants={itemVariants}
-          className="rounded-2xl border border-slate-100 bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)]"
+          className="rounded-2xl border border-slate-100 bg-lab-paper p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)]"
         >
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-[#1F2937]">점수 추이</h2>
               <p className="text-sm text-slate-400">시험별 백점환산 흐름</p>
             </div>
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-[#4F46E5]">
+            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-[#2f4054]">
               {report.label}
             </span>
           </div>
@@ -480,12 +480,12 @@ export default function StudentReport({
                   tickLine={false}
                   width={36}
                 />
-                <Tooltip content={<TrendTooltip />} cursor={{ stroke: "#C7D2FE", strokeWidth: 1 }} />
+                <Tooltip content={<TrendTooltip />} cursor={{ stroke: "#b9c4d3", strokeWidth: 1 }} />
                 <Line
                   activeDot={{ r: 6, stroke: "#FFFFFF", strokeWidth: 3 }}
                   dataKey="score"
-                  dot={{ r: 4, fill: "#4F46E5", stroke: "#FFFFFF", strokeWidth: 2 }}
-                  stroke="#4F46E5"
+                  dot={{ r: 4, fill: "#2f4054", stroke: "#FFFFFF", strokeWidth: 2 }}
+                  stroke="#2f4054"
                   strokeLinecap="round"
                   strokeWidth={3}
                   type="monotone"
@@ -506,7 +506,7 @@ export default function StudentReport({
               <motion.article
                 key={item.id}
                 whileHover={{ scale: 1.01 }}
-                className={`rounded-2xl border bg-white p-4 shadow-[0_12px_32px_rgba(15,23,42,0.05)] transition-all ${
+                className={`rounded-2xl border bg-lab-paper p-4 shadow-[0_12px_32px_rgba(15,23,42,0.05)] transition-all ${
                   item.status === "retest"
                     ? "border-amber-100 border-l-4 border-l-[#F59E0B]"
                     : "border-slate-100"
@@ -541,7 +541,7 @@ export default function StudentReport({
           <button
             type="button"
             onClick={shareReport}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4F46E5] px-4 py-3.5 text-sm font-bold text-white shadow-[0_18px_40px_rgba(79,70,229,0.28)] transition-all hover:scale-[1.01] hover:bg-[#4338CA] active:scale-[0.99]"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#2f4054] px-4 py-3.5 text-sm font-bold text-white shadow-[0_18px_40px_rgba(31,41,51,0.28)] transition-all hover:scale-[1.01] hover:bg-[#263443] active:scale-[0.99]"
           >
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
             {shareLabel}

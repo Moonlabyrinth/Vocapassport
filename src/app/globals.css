@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --background: #f6f7fb;
-  --foreground: #1f2330;
+  /* 로그인 화면과 동일한 따뜻한 종이톤 배경 + 잉크 텍스트 */
+  --background: #f1ede4;
+  --foreground: #1f2933;
 }
 
 html,

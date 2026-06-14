@@ -174,13 +174,13 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
 
   return (
     <div className="min-h-screen pb-10">
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
+      <header className="bg-lab-paper border-b border-lab-line sticky top-0 z-30">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🧑‍🎓</span>
             <div>
-              <h1 className="font-bold text-gray-800 leading-tight">{me?.name} 님</h1>
-              <p className="text-xs text-gray-400">{myClass?.name}</p>
+              <h1 className="font-serif font-bold text-lab-navy leading-tight">{me?.name} 님</h1>
+              <p className="text-xs text-lab-muted">{myClass?.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -198,12 +198,12 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 rounded-xl border border-gray-200 bg-gray-50 p-1">
+        <div className="grid grid-cols-2 rounded-xl border border-lab-line bg-[#e9e3d6] p-1">
           <button
             type="button"
             onClick={() => setActiveTab("word")}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              activeTab === "word" ? "bg-white text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              activeTab === "word" ? "bg-lab-paper text-brand-700 shadow-lab-sm" : "text-lab-muted hover:text-lab-navy"
             }`}
           >
             단어시험
@@ -212,7 +212,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
             type="button"
             onClick={() => setActiveTab("monthly")}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-              activeTab === "monthly" ? "bg-white text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              activeTab === "monthly" ? "bg-lab-paper text-brand-700 shadow-lab-sm" : "text-lab-muted hover:text-lab-navy"
             }`}
           >
             먼슬리
@@ -225,7 +225,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
               <StudentReport
                 reports={wordReports}
                 embedded
-                className="rounded-3xl border border-gray-100 bg-[#F9FAFB] px-3 py-4 shadow-sm"
+                className="rounded-3xl border border-lab-line bg-lab-page px-3 py-4 shadow-lab-sm"
               />
             )}
 

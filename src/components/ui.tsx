@@ -15,10 +15,10 @@ export function Card({
   right?: React.ReactNode;
 }) {
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 ${className}`}>
+    <div className={`bg-lab-paper rounded-2xl shadow-lab-sm border border-lab-line ${className}`}>
       {(title || right) && (
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
-          {title && <h3 className="text-lg font-semibold text-gray-800">{title}</h3>}
+          {title && <h3 className="text-lg font-semibold text-lab-navy">{title}</h3>}
           {right}
         </div>
       )}
@@ -108,15 +108,15 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-base font-medium text-gray-600 mb-1">{label}</span>
+      <span className="block text-base font-medium text-lab-navy mb-1">{label}</span>
       {children}
-      {hint && <span className="block text-sm text-gray-400 mt-1">{hint}</span>}
+      {hint && <span className="block text-sm text-lab-muted mt-1">{hint}</span>}
     </label>
   );
 }
 
 const inputCls =
-  "w-full rounded-xl border border-gray-200 px-3 py-2.5 text-base focus:border-brand-600 focus:ring-2 focus:ring-brand-100 outline-none bg-white";
+  "w-full rounded-xl border border-lab-line px-3 py-2.5 text-base focus:border-brand-600 focus:ring-2 focus:ring-brand-100 outline-none bg-white";
 
 // 로그인 리디자인용 변형(골드 포커스 링, 종이톤). 기본값은 기존과 동일(하위호환).
 const inputClsLab =
@@ -192,12 +192,12 @@ export function Badge({
   size?: "sm" | "md" | "lg";
 }) {
   const colors: Record<string, string> = {
-    gray: "bg-gray-100 text-gray-600",
-    green: "bg-green-100 text-green-700",
+    gray: "bg-[#f1ede2] text-lab-muted",
+    green: "bg-lab-green-soft text-lab-green",
     red: "bg-red-100 text-red-700",
     amber: "bg-amber-100 text-amber-700",
-    indigo: "bg-indigo-100 text-indigo-700",
-    blue: "bg-blue-100 text-blue-700",
+    indigo: "bg-brand-50 text-brand-700",
+    blue: "bg-[#eef1f8] text-lab-navy",
   };
   const sizes: Record<string, string> = {
     sm: "px-2.5 py-0.5 text-xs",
@@ -231,12 +231,12 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className={`bg-white w-full ${width} rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] overflow-y-auto`}
+        className={`bg-lab-paper w-full ${width} rounded-t-2xl sm:rounded-2xl shadow-lab max-h-[92vh] overflow-y-auto`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white">
-          <h3 className="font-semibold text-gray-800">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-lab-line sticky top-0 bg-lab-paper">
+          <h3 className="font-semibold text-lab-navy">{title}</h3>
+          <button onClick={onClose} className="text-lab-muted hover:text-lab-navy text-xl leading-none">
             ✕
           </button>
         </div>
@@ -248,7 +248,7 @@ export function Modal({
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-center text-base text-gray-400 py-10">{children}</div>
+    <div className="text-center text-base text-lab-muted py-10">{children}</div>
   );
 }
 
@@ -264,17 +264,17 @@ export function Stat({
   accent?: "gray" | "green" | "indigo" | "amber" | "red";
 }) {
   const accents: Record<string, string> = {
-    gray: "text-gray-800",
-    green: "text-green-600",
-    indigo: "text-brand-600",
+    gray: "text-lab-ink",
+    green: "text-lab-green",
+    indigo: "text-brand-700",
     amber: "text-amber-600",
     red: "text-red-600",
   };
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
-      <div className="text-sm text-gray-500">{label}</div>
+    <div className="bg-lab-paper rounded-2xl border border-lab-line shadow-lab-sm px-4 py-3">
+      <div className="text-sm text-lab-muted">{label}</div>
       <div className={`text-3xl font-bold mt-0.5 ${accents[accent]}`}>{value}</div>
-      {sub && <div className="text-sm text-gray-400 mt-0.5">{sub}</div>}
+      {sub && <div className="text-sm text-lab-muted mt-0.5">{sub}</div>}
     </div>
   );
 }
