@@ -21,6 +21,7 @@ export function teacherView(db: Database): Database {
   return {
     ...db,
     students: db.students.map(sanitizeStudent) as unknown as Student[],
+    homeworkRecords: db.homeworkRecords ?? [],
     settings: publicSettings(db.settings), // 선생님 비번 해시 등은 내보내지 않음
   };
 }
@@ -37,6 +38,7 @@ export function studentView(db: Database, studentId: string): Database {
       retests: [],
       monthlyTests: [],
       monthlyResults: [],
+      homeworkRecords: [],
       settings: publicSettings(db.settings),
     };
   }
@@ -52,6 +54,7 @@ export function studentView(db: Database, studentId: string): Database {
     retests: db.retests.filter((r) => r.studentId === studentId),
     monthlyTests: db.monthlyTests.filter((t) => myTestIds.has(t.id)),
     monthlyResults: myMonthlyResults,
+    homeworkRecords: (db.homeworkRecords ?? []).filter((h) => h.studentId === studentId),
     settings: publicSettings(db.settings),
   };
 }

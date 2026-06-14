@@ -221,6 +221,35 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
 
         {activeTab === "word" && (
           <>
+            {/* 현재 공부 중인 책 (수준) */}
+            {(() => {
+              const currentBook = me?.currentBookId
+                ? db.books.find((b) => b.id === me.currentBookId)
+                : null;
+              if (!currentBook) return null;
+              const myHw = [...(db.homeworkRecords ?? [])]
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .slice(0, 7);
+              const hwDone = myHw.filter((h) => h.done).length;
+              const hwRate = myHw.length > 0 ? Math.round((hwDone / myHw.length) * 100) : null;
+              return (
+                <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-brand-500 font-medium mb-0.5">현재 공부 중인 책</p>
+                    <p className="font-bold text-brand-800 text-base">{currentBook.title}</p>
+                  </div>
+                  {hwRate !== null && (
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 mb-0.5">최근 7일 숙제</p>
+                      <p className={`font-bold text-lg ${hwRate >= 80 ? "text-green-600" : hwRate >= 50 ? "text-amber-600" : "text-red-500"}`}>
+                        {hwRate}%
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {wordReports.length > 0 && (
               <StudentReport
                 reports={wordReports}
@@ -353,6 +382,41 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                 </div>
               )}
             </Card>
+            {/* 숙제 기록 */}
+            {(db.homeworkRecords ?? []).length > 0 && (
+              <Card title="내 숙제 기록">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-400 border-b border-gray-100">
+                        <th className="py-2 pr-3 font-medium">날짜</th>
+                        <th className="py-2 pr-3 font-medium">책</th>
+                        <th className="py-2 font-medium text-center">숙제</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...(db.homeworkRecords ?? [])]
+                        .sort((a, b) => b.date.localeCompare(a.date))
+                        .slice(0, 20)
+                        .map((h) => {
+                          const book = h.bookId ? db.books.find((b) => b.id === h.bookId) : null;
+                          return (
+                            <tr key={h.id} className="border-b border-gray-50">
+                              <td className="py-2 pr-3 text-gray-500">{h.date.slice(5)}</td>
+                              <td className="py-2 pr-3 text-gray-600">{book?.title ?? "-"}</td>
+                              <td className="py-2 text-center">
+                                <span className={`font-bold text-base ${h.done ? "text-green-600" : "text-red-400"}`}>
+                                  {h.done ? "O" : "X"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
           </>
         )}
 

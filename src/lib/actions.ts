@@ -10,6 +10,7 @@ import {
   RetestSchedule,
   PassKindChoice,
   MonthlySection,
+  HomeworkRecord,
 } from "./types";
 import { isPassed, isPerfect, resolveThreshold, type AchievementPeriod } from "./logic";
 
@@ -38,7 +39,7 @@ export type Action =
   | { type: "updateClass"; id: string; patch: Partial<{ name: string; scheduleType: ScheduleType; passThreshold: number }> }
   | { type: "deleteClass"; id: string }
   | { type: "createStudent"; classId: string; name: string }
-  | { type: "updateStudent"; id: string; patch: Partial<{ classId: string; name: string; status: "active" | "withdrawn"; withdrawnAt: string | null }> }
+  | { type: "updateStudent"; id: string; patch: Partial<{ classId: string; name: string; status: "active" | "withdrawn"; withdrawnAt: string | null; currentBookId: string | null }> }
   | { type: "deleteStudent"; id: string }
   | { type: "createBook"; classId: string; title: string; defaultTotalScore: number; passThreshold: number | null; passMark?: number | null }
   | { type: "updateBook"; id: string; patch: Partial<{ title: string; defaultTotalScore: number; passThreshold: number | null; passMark: number | null }> }
@@ -73,6 +74,12 @@ export type Action =
   | { type: "deleteMonthlyTest"; id: string }
   | { type: "setMonthlyResults"; monthlyTestId: string; entries: { studentId: string; scores: Record<string, number> }[] }
   | { type: "updateAchievementPeriods"; periods: AchievementPeriod[] }
+  | {
+      type: "setHomeworkRecords";
+      classId: string;
+      date: string;
+      entries: { studentId: string; done: boolean; memo?: string; bookId?: string | null }[];
+    }
   | {
       type: "completeRetest";
       retestId: string;
@@ -184,6 +191,7 @@ export function applyAction(db: Database, a: Action): ActionResult {
       db.books = db.books.filter((b) => b.classId !== a.id);
       db.records = db.records.filter((r) => r.classId !== a.id);
       db.retests = db.retests.filter((rt) => rt.classId !== a.id && !studs.includes(rt.studentId));
+      db.homeworkRecords = (db.homeworkRecords ?? []).filter((h) => h.classId !== a.id);
       db.classes = db.classes.filter((c) => c.id !== a.id);
       return { ok: true };
     }
@@ -217,11 +225,13 @@ export function applyAction(db: Database, a: Action): ActionResult {
       } else if (a.patch.withdrawnAt !== undefined) {
         s.withdrawnAt = a.patch.withdrawnAt;
       }
+      if (a.patch.currentBookId !== undefined) s.currentBookId = a.patch.currentBookId;
       return { ok: true, id: s.id };
     }
     case "deleteStudent": {
       db.records = db.records.filter((r) => r.studentId !== a.id);
       db.retests = db.retests.filter((rt) => rt.studentId !== a.id);
+      db.homeworkRecords = (db.homeworkRecords ?? []).filter((h) => h.studentId !== a.id);
       db.students = db.students.filter((s) => s.id !== a.id);
       return { ok: true };
     }
@@ -320,6 +330,35 @@ export function applyAction(db: Database, a: Action): ActionResult {
       const ids = [...new Set(a.ids)].filter(Boolean);
       if (!ids.length) return { ok: false, error: "삭제할 기록을 선택하세요." };
       deleteScoreRecords(db, ids);
+      return { ok: true };
+    }
+
+    case "setHomeworkRecords": {
+      if (!findClass(db, a.classId)) return { ok: false, error: "반을 찾을 수 없습니다." };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(a.date)) return { ok: false, error: "날짜 형식이 올바르지 않습니다." };
+      const hw = db.homeworkRecords ?? [];
+      for (const entry of a.entries) {
+        const student = db.students.find((s) => s.id === entry.studentId);
+        if (!student || student.classId !== a.classId) continue;
+        const existing = hw.find((h) => h.studentId === entry.studentId && h.date === a.date);
+        if (existing) {
+          existing.done = entry.done;
+          existing.memo = entry.memo ?? existing.memo;
+          if (entry.bookId !== undefined) existing.bookId = entry.bookId ?? null;
+        } else {
+          hw.push({
+            id: genId("hw"),
+            classId: a.classId,
+            studentId: entry.studentId,
+            date: a.date,
+            bookId: entry.bookId ?? null,
+            done: entry.done,
+            memo: entry.memo,
+            createdAt: now,
+          } as HomeworkRecord);
+        }
+      }
+      db.homeworkRecords = hw;
       return { ok: true };
     }
 

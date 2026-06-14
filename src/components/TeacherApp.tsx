@@ -7,16 +7,18 @@ import RetestTab from "@/components/RetestTab";
 import StatsTab from "@/components/StatsTab";
 import ManageTab from "@/components/ManageTab";
 import MonthlyTab from "@/components/MonthlyTab";
+import HomeworkTab from "@/components/HomeworkTab";
 import { Button, Modal, Field, Input } from "@/components/ui";
 import CreatorFooter from "@/components/CreatorFooter";
 
-type Tab = "score" | "retest" | "stats" | "monthly" | "manage";
+type Tab = "score" | "retest" | "stats" | "monthly" | "homework" | "manage";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "score", label: "점수 입력", icon: "✏️" },
   { id: "retest", label: "재시험", icon: "🔁" },
   { id: "stats", label: "통계", icon: "📊" },
   { id: "monthly", label: "먼슬리", icon: "🗓️" },
+  { id: "homework", label: "숙제", icon: "📝" },
   { id: "manage", label: "관리", icon: "⚙️" },
 ];
 
@@ -71,13 +73,14 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
         {tab === "retest" && <RetestTab app={app} />}
         {tab === "stats" && <StatsTab app={app} />}
         {tab === "monthly" && <MonthlyTab app={app} />}
+        {tab === "homework" && <HomeworkTab app={app} />}
         {tab === "manage" && <ManageTab app={app} />}
       </main>
 
       <CreatorFooter className="px-4 pb-6" />
 
       <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 z-30">
-        <div className="grid grid-cols-5">
+        <div className="grid grid-cols-6">
           {TABS.map((t) => (
             <button
               key={t.id}

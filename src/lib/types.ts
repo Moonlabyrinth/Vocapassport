@@ -30,6 +30,8 @@ export interface Student {
   passwordSalt: string;
   /** 최초 로그인 시 비밀번호 변경 권장 플래그 */
   mustChangePassword: boolean;
+  /** 현재 공부 중인 책 id (= 수준을 나타냄) */
+  currentBookId?: string | null;
 }
 
 /** 클라이언트로 보낼 때 비밀번호 필드를 제거한 학생 */
@@ -143,6 +145,18 @@ export interface MonthlyResult {
   updatedAt: string;
 }
 
+/** 숙제 기록 — 날짜별 학생 숙제 완료 여부 */
+export interface HomeworkRecord {
+  id: string;
+  classId: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  bookId: string | null;
+  done: boolean;
+  memo?: string;
+  createdAt: string;
+}
+
 /** 앱 설정 (인증 등) */
 export interface Settings {
   /** 선생님 비밀번호 해시/솔트 (서버 전용) */
@@ -169,6 +183,7 @@ export interface Database {
   retests: RetestSchedule[];
   monthlyTests: MonthlyTest[];
   monthlyResults: MonthlyResult[];
+  homeworkRecords: HomeworkRecord[];
   settings: Settings;
 }
 
@@ -180,5 +195,6 @@ export const emptyDatabase = (): Database => ({
   retests: [],
   monthlyTests: [],
   monthlyResults: [],
+  homeworkRecords: [],
   settings: {},
 });
