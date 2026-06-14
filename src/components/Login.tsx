@@ -222,10 +222,6 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
                 </p>
               )}
             </div>
-
-            <div className="mt-6 text-center text-[10.5px] tracking-[0.16em] text-[rgba(37,41,50,0.45)]">
-              System by <b className="font-serif tracking-[0.1em] text-[rgba(37,41,50,0.7)]">LINDSAY LAB</b>
-            </div>
           </section>
         </div>
 
