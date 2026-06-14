@@ -13,6 +13,8 @@ import {
   isAbsent,
   isDateInRange,
   isExempt,
+  isMainPass,
+  isRetestPass,
   percentOf,
   resolveAchievementPeriods,
   round1,
@@ -89,12 +91,16 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
     group && (periodKey === "all" ? seasonRange(group) : selectedPeriod ?? seasonRange(group));
 
   const data = useMemo(() => {
-    const periodRecords = sortChrono(
-      firstRecords.filter((r) => activePeriods.some((p) => isDateInRange(r.examDate, p.startDate, p.endDate)))
-    );
+    const inScope = (r: { examDate: string }) =>
+      activePeriods.some((p) => isDateInRange(r.examDate, p.startDate, p.endDate));
+    const periodRecords = sortChrono(firstRecords.filter(inScope));
     const countable = periodRecords.filter((r) => !isAbsent(r) && !isExempt(r));
-    const passCount = countable.filter((r) => r.passed).length;
-    const retryCount = countable.length - passCount;
+    const mainPassCount = countable.filter((r) => isMainPass(r)).length;
+    const failCount = countable.length - mainPassCount; // 본시험 미통과(응시 기준)
+    // 재시험 통과: 재시험 응시 기록 포함, 구간 내 전체 승인 기록 기준
+    const retestPassCount = db.records.filter(
+      (r) => r.status === "approved" && inScope(r) && isRetestPass(r)
+    ).length;
     const growth = computeGrowthDelta(periodRecords);
     const cut = countable.length ? Math.round(cutPercent(countable[countable.length - 1])) : 80;
 
@@ -106,20 +112,21 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
       id: r.id,
       round: countable.length - idx,
       score: round1(percentOf(r.actualScore, r.totalScore)) ?? 0,
-      passed: r.passed,
+      passed: isMainPass(r),
     }));
 
     return {
       avg: round1(avgPercent(periodRecords)),
       attemptCount: countable.length,
-      passCount,
-      retryCount,
+      mainPassCount,
+      failCount,
+      retestPassCount,
       growthDelta: growth?.growthDelta ?? null,
       cut,
       chart,
       records,
     };
-  }, [firstRecords, activePeriods]);
+  }, [firstRecords, activePeriods, db.records]);
 
   async function logout() {
     await apiLogout();
@@ -218,8 +225,16 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <SummaryCard accent="#2f4054" label={`${scopeLabel} 평균`} value={data.avg != null ? `${data.avg}` : "-"} unit="점"
             note={hasData ? `${data.attemptCount}회 응시 기준` : "응시 기록 없음"} />
-          <SummaryCard accent="#6f8f78" label="통과 현황" value={`${data.passCount}`} unit={`/ ${data.attemptCount}회`}
-            note={data.retryCount > 0 ? `재시험 ${data.retryCount}회` : hasData ? "전부 통과 중" : "응시 기록 없음"} />
+          <SummaryCard accent="#6f8f78" label="본시험 통과" value={`${data.mainPassCount}`} unit={`/ ${data.attemptCount}회`}
+            note={
+              !hasData
+                ? "응시 기록 없음"
+                : data.retestPassCount > 0
+                ? `재시험 통과 ${data.retestPassCount}회`
+                : data.failCount > 0
+                ? `미통과 ${data.failCount}회`
+                : "전부 통과"
+            } />
           <SummaryCard accent="#a98249" label={`${scopeLabel} 성장`}
             value={data.growthDelta != null && data.growthDelta > 0 ? `+${data.growthDelta}` : data.growthDelta != null ? `${data.growthDelta}` : "-"}
             unit="점"

@@ -18,6 +18,8 @@ import {
   monthlyPercent,
   resolveAchievementPeriods,
   defaultPeriodForView,
+  isMainPass,
+  isRetestPass,
   type AchievementPeriod,
 } from "@/lib/logic";
 import { formatDateTime, relativeFromNow } from "@/lib/datetime";
@@ -107,6 +109,13 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
           : false;
         const reward = computeAchievementPeriodStats(approvedRegularRecords, period);
         const avg = average(periodRecords.filter((record) => !record.isAbsent).map(convertedScore));
+        // 재시험 통과(별도 집계) — 재시험 응시 기록 포함, 구간 내 전체 승인 기록 기준
+        const retestPassCount = records.filter(
+          (record) =>
+            record.status === "approved" &&
+            isDateInRange(record.examDate, period.startDate, period.endDate) &&
+            isRetestPass(record)
+        ).length;
 
         return {
           key: period.key,
@@ -121,6 +130,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
           passGoal: reward.passGoal,
           totalTests: reward.total,
           passCount: reward.passCount,
+          retestPassCount,
           remainingPasses: reward.remainingPasses,
           currentPassStreak: reward.currentPassStreak,
           bestPassStreak: reward.bestPassStreak,
@@ -143,7 +153,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
               date: formatKoreanDate(record.examDate),
               score: convertedScore(record),
               maxScore: 100,
-              status: record.isAbsent ? "absent" : record.passed ? "pass" : "retest",
+              status: record.isAbsent ? "absent" : isMainPass(record) ? "pass" : "retest",
             })),
         };
       });
@@ -289,7 +299,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Stat label="응시" value={stats.total} accent="indigo" />
               <Stat label="평균" value={stats.avgPercent != null ? `${round1(stats.avgPercent)}%` : "-"} accent="green" />
-              <Stat label="통과" value={stats.passCount} accent="green" sub={`연속 ${stats.currentPassStreak}`} />
+              <Stat label="본시험 통과" value={stats.passCount} accent="green" sub={`재시험 ${stats.retestPassCount} · 연속 ${stats.currentPassStreak}`} />
               <Stat label="만점" value={stats.perfectCount} accent="amber" sub={`연속 ${stats.currentPerfectStreak}`} />
             </div>
 

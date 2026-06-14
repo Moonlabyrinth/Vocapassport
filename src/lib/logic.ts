@@ -277,7 +277,8 @@ export interface StreakStats {
   total: number; // 응시 수
   absentCount: number; // 결석 수
   perfectCount: number; // 만점 횟수
-  passCount: number; // 통과 횟수
+  passCount: number; // 본시험/자동 통과 횟수 (재시험 통과 제외)
+  retestPassCount: number; // 재시험으로 통과한 횟수 (별도 집계)
   currentPerfectStreak: number; // 현재 만점 연속
   bestPerfectStreak: number; // 최고 만점 연속
   currentPassStreak: number; // 현재 통과 연속
@@ -307,12 +308,23 @@ export function isAbsent(r: Pick<ScoreRecord, "isAbsent">): boolean {
   return !!r.isAbsent;
 }
 
+/** 재시험으로 통과한 기록: 재시험 응시 기록이거나 통과 종류가 '재시험'으로 분류된 통과 */
+export function isRetestPass(r: Pick<ScoreRecord, "passed" | "passKind" | "attemptType" | "isAbsent">): boolean {
+  return !!r.passed && !isAbsent(r) && !isExempt(r) && (r.attemptType === "retest" || r.passKind === "retest");
+}
+
+/** 본시험/자동 통과: 재시험이 아닌 통과(자동 판정 통과 + 본시험 통과) */
+export function isMainPass(r: Pick<ScoreRecord, "passed" | "passKind" | "attemptType" | "isAbsent">): boolean {
+  return !!r.passed && !isAbsent(r) && !isExempt(r) && !isRetestPass(r);
+}
+
 export function computeStreaks(records: ScoreRecord[]): StreakStats {
   const ordered = sortChrono(records);
   let total = 0;
   let absentCount = 0;
   let perfectCount = 0;
   let passCount = 0;
+  let retestPassCount = 0;
   let curPerfect = 0;
   let bestPerfect = 0;
   let curPass = 0;
@@ -336,7 +348,12 @@ export function computeStreaks(records: ScoreRecord[]): StreakStats {
     } else {
       curPerfect = 0;
     }
-    if (r.passed) {
+    if (isRetestPass(r)) {
+      // 재시험 통과: 별도 집계. 본시험 연속 통과(streak)는 끊되 미통과로 보지 않음
+      retestPassCount++;
+      curPass = 0;
+    } else if (r.passed) {
+      // 본시험/자동 통과
       passCount++;
       curPass++;
       if (curPass > bestPass) bestPass = curPass;
@@ -352,6 +369,7 @@ export function computeStreaks(records: ScoreRecord[]): StreakStats {
     absentCount,
     perfectCount,
     passCount,
+    retestPassCount,
     currentPerfectStreak: curPerfect,
     bestPerfectStreak: bestPerfect,
     currentPassStreak: curPass,

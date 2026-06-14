@@ -327,7 +327,7 @@ function StudentDetail({
         <Stat label="응시" value={rewardMode ? `${st.total}/${achievementPeriod.targetTests}` : st.total} />
         <Stat label="평균" value={st.avgPercent != null ? `${round1(st.avgPercent)}%` : "-"} accent="green" />
         <Stat label="만점 횟수" value={st.perfectCount} accent="amber" sub={`최고연속 ${st.bestPerfectStreak}`} />
-        <Stat label="통과 횟수" value={rewardMode ? `${st.passCount}/${achievementPeriod.passGoal}` : st.passCount} accent="green" sub={`최고연속 ${st.bestPassStreak}`} />
+        <Stat label="본시험 통과" value={rewardMode ? `${st.passCount}/${achievementPeriod.passGoal}` : st.passCount} accent="green" sub={`재시험 ${st.retestPassCount} · 최고연속 ${st.bestPassStreak}`} />
         <Stat label={rewardMode ? "성취" : "현재 연속"} value={rewardMode ? rewardText(rewardStats) : `${st.currentPassStreak}`} accent="indigo" sub={rewardMode ? `연속통과 ${st.currentPassStreak}` : `만점연속 ${st.currentPerfectStreak}`} />
       </div>
       {data.length === 0 ? (

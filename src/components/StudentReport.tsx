@@ -45,6 +45,7 @@ export interface StudentReportMonth {
   passGoal?: number;
   totalTests?: number;
   passCount?: number;
+  retestPassCount?: number;
   remainingPasses?: number;
   currentPassStreak?: number;
   bestPassStreak?: number;
@@ -270,6 +271,7 @@ export default function StudentReport({
 
   const historyPassCount = report.history.filter((item) => item.status === "pass").length;
   const passCount = report.passCount ?? historyPassCount;
+  const retestPassCount = report.retestPassCount ?? 0;
   const totalTests = report.totalTests ?? report.history.length;
   const targetTests = report.targetTests ?? Math.max(totalTests, report.history.length);
   const passGoal = report.passGoal ?? Math.min(9, Math.max(1, targetTests));
@@ -427,7 +429,9 @@ export default function StudentReport({
               <CircularProgress value={report.passRate} />
             </div>
             <p className="mt-3 text-center text-sm font-medium text-slate-500">
-              재시험 기록은 성취 횟수에서 제외됩니다.
+              {retestPassCount > 0
+                ? `재시험 통과 ${retestPassCount}회는 성취 횟수에서 제외됩니다.`
+                : "재시험 기록은 성취 횟수에서 제외됩니다."}
             </p>
           </div>
 
