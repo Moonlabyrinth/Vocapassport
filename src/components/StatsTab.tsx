@@ -132,7 +132,7 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
             </Select>
           </Field>
           <Field label="기준">
-            <div className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-600 bg-gray-50">
+            <div className="rounded-xl border border-lab-line px-3 py-2.5 text-sm text-lab-muted bg-[#f1ede2]">
               {periodLabel(period, achievementPeriod, customStart, customEnd)}
             </div>
           </Field>
@@ -183,12 +183,12 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
           <div style={{ width: "100%", height: 280 }}>
             <ResponsiveContainer>
               <LineChart data={trend.data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef0f4" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e8e2d6" />
                 <XAxis dataKey="date" fontSize={12} tickMargin={6} />
                 <YAxis domain={[0, 100]} fontSize={12} unit="%" />
                 <Tooltip formatter={(v: number) => `${v}%`} />
                 <Legend />
-                {trend.hasRound[1] && <Line type="monotone" dataKey="r1" name="1회독" stroke="#6366f1" strokeWidth={2} connectNulls dot={false} />}
+                {trend.hasRound[1] && <Line type="monotone" dataKey="r1" name="1회독" stroke="#2f4054" strokeWidth={2} connectNulls dot={false} />}
                 {trend.hasRound[2] && <Line type="monotone" dataKey="r2" name="2회독" stroke="#10b981" strokeWidth={2} connectNulls dot={false} />}
                 {trend.hasRound[3] && <Line type="monotone" dataKey="r3" name="3회독" stroke="#f59e0b" strokeWidth={2} connectNulls dot={false} />}
                 <Line type="monotone" dataKey="all" name="전체" stroke="#94a3b8" strokeWidth={2} strokeDasharray="4 4" connectNulls dot={false} />
@@ -206,7 +206,7 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">
               <thead>
-                <tr className="text-left text-gray-400 border-b border-gray-100">
+                <tr className="text-left text-lab-muted border-b border-lab-line">
                   <th className="py-2 pr-3 font-medium">학생</th>
                   <th className="py-2 pr-3 font-medium">응시</th>
                   <th className="py-2 pr-3 font-medium">결석</th>
@@ -224,13 +224,13 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
                   const rewardStats = computeAchievementPeriodStats(recs, achievementPeriod);
                   const st = rewardMode ? rewardStats : computeStreaks(recs);
                   return (
-                    <tr key={s.id} className="border-b border-gray-50">
-                      <td className="py-2 pr-3 font-medium text-gray-800">{s.name}</td>
-                      <td className="py-2 pr-3 text-gray-600">
+                    <tr key={s.id} className="border-b border-lab-line">
+                      <td className="py-2 pr-3 font-medium text-lab-ink">{s.name}</td>
+                      <td className="py-2 pr-3 text-lab-muted">
                         {st.total - st.absentCount}{rewardMode ? ` / ${achievementPeriod.targetTests}` : ""}
                       </td>
-                      <td className="py-2 pr-3 text-gray-600">{st.absentCount}</td>
-                      <td className="py-2 pr-3 text-gray-700">{st.avgPercent != null ? `${round1(st.avgPercent)}%` : "-"}</td>
+                      <td className="py-2 pr-3 text-lab-muted">{st.absentCount}</td>
+                      <td className="py-2 pr-3 text-lab-ink">{st.avgPercent != null ? `${round1(st.avgPercent)}%` : "-"}</td>
                       <td className="py-2 pr-3">
                         <Badge color="amber">{st.perfectCount}</Badge>
                       </td>
@@ -239,11 +239,11 @@ export default function StatsTab({ app }: { app: AppStateHook }) {
                       </td>
                       <td className="py-2 pr-3">
                         <span className="font-semibold text-amber-600">{st.currentPerfectStreak}</span>
-                        <span className="text-gray-300"> / 최고 {st.bestPerfectStreak}</span>
+                        <span className="text-[#bdb7a9]"> / 최고 {st.bestPerfectStreak}</span>
                       </td>
                       <td className="py-2 pr-3">
                         <span className="font-semibold text-green-600">{st.currentPassStreak}</span>
-                        <span className="text-gray-300"> / 최고 {st.bestPassStreak}</span>
+                        <span className="text-[#bdb7a9]"> / 최고 {st.bestPassStreak}</span>
                       </td>
                       {rewardMode && <td className="py-2 pr-3">{rewardBadge(rewardStats)}</td>}
                     </tr>
@@ -330,11 +330,11 @@ function StudentDetail({
         <div style={{ width: "100%", height: 260 }}>
           <ResponsiveContainer>
             <LineChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eef0f4" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e8e2d6" />
               <XAxis dataKey="label" fontSize={12} tickMargin={6} />
               <YAxis domain={[0, 100]} fontSize={12} unit="%" />
               <Tooltip formatter={(v: number) => `${v}%`} />
-              <Line type="monotone" dataKey="pct" name="점수" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="pct" name="점수" stroke="#2f4054" strokeWidth={2} dot={{ r: 3 }} />
               <Line type="monotone" dataKey="cut" name="통과컷" stroke="#f43f5e" strokeWidth={1} strokeDasharray="4 4" dot={false} />
             </LineChart>
           </ResponsiveContainer>

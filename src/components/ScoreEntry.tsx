@@ -211,7 +211,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
             />
           </Field>
           <Field label="결석 여부" hint="점수 대신 결석으로 기록합니다.">
-            <label className="flex h-[46px] items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-base text-gray-700">
+            <label className="flex h-[46px] items-center gap-2 rounded-xl border border-lab-line bg-lab-paper px-3 text-base text-lab-ink">
               <input
                 type="checkbox"
                 checked={isAbsent}
@@ -219,7 +219,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
                   setIsAbsent(e.target.checked);
                   if (e.target.checked) setActual("");
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                className="h-4 w-4 rounded border-lab-line text-brand-600"
               />
               결석
             </label>
@@ -267,7 +267,7 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-400 border-b border-gray-100">
+                <tr className="text-left text-lab-muted border-b border-lab-line">
                   <th className="py-2 pr-3 font-medium">학생</th>
                   <th className="py-2 pr-3 font-medium">책</th>
                   <th className="py-2 pr-3 font-medium">회독</th>
@@ -284,15 +284,15 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
                     (rt) => rt.scoreRecordId === r.id && rt.status === "scheduled"
                   );
                   return (
-                    <tr key={r.id} className="border-b border-gray-50">
-                      <td className="py-2 pr-3 text-gray-800">{st?.name ?? "?"}</td>
-                      <td className="py-2 pr-3 text-gray-600">{r.bookTitle}</td>
-                      <td className="py-2 pr-3 text-gray-500">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</td>
-                      <td className="py-2 pr-3 text-gray-700">{r.isAbsent ? "결석" : `${r.actualScore}/${r.totalScore}`}</td>
+                    <tr key={r.id} className="border-b border-lab-line">
+                      <td className="py-2 pr-3 text-lab-ink">{st?.name ?? "?"}</td>
+                      <td className="py-2 pr-3 text-lab-muted">{r.bookTitle}</td>
+                      <td className="py-2 pr-3 text-lab-muted">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</td>
+                      <td className="py-2 pr-3 text-lab-ink">{r.isAbsent ? "결석" : `${r.actualScore}/${r.totalScore}`}</td>
                       <td className="py-2 pr-3">
                         {r.isAbsent ? <Badge color="gray">결석</Badge> : r.isPerfect ? <Badge color="amber">만점</Badge> : r.passed ? <Badge color="green">통과</Badge> : <Badge color="red">미통과</Badge>}
                       </td>
-                      <td className="py-2 pr-3 text-gray-400">{r.examDate.slice(5)}</td>
+                      <td className="py-2 pr-3 text-lab-muted">{r.examDate.slice(5)}</td>
                       <td className="py-2">
                         <div className="flex justify-end gap-1">
                         {!r.isAbsent && !r.passed && !hasRetest && (

@@ -72,23 +72,23 @@ export default function DatePicker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-left bg-white focus:border-brand-600 focus:ring-2 focus:ring-brand-100 outline-none ${
-          sel ? "text-gray-800" : "text-gray-400"
+        className={`w-full rounded-xl border border-lab-line px-3 py-2.5 text-sm text-left bg-white focus:border-brand-600 focus:ring-2 focus:ring-brand-100 outline-none ${
+          sel ? "text-lab-ink" : "text-lab-muted"
         } ${className}`}
       >
         {sel ? `${sel.y}-${pad(sel.m + 1)}-${pad(sel.d)}` : placeholder}
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-72 bg-white rounded-xl border border-gray-200 shadow-lg p-3">
+        <div className="absolute z-50 mt-1 w-72 bg-white rounded-xl border border-lab-line shadow-lg p-3">
           <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={() => shift(-1)} className="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-500 text-lg leading-none">‹</button>
-            <div className="font-medium text-gray-800 text-sm">{viewY}년 {viewM + 1}월</div>
-            <button type="button" onClick={() => shift(1)} className="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-500 text-lg leading-none">›</button>
+            <button type="button" onClick={() => shift(-1)} className="w-8 h-8 rounded-lg hover:bg-[#e9e3d6] text-lab-muted text-lg leading-none">‹</button>
+            <div className="font-medium text-lab-ink text-sm">{viewY}년 {viewM + 1}월</div>
+            <button type="button" onClick={() => shift(1)} className="w-8 h-8 rounded-lg hover:bg-[#e9e3d6] text-lab-muted text-lg leading-none">›</button>
           </div>
           <div className="grid grid-cols-7 text-center text-xs mb-1">
             {WEEKDAYS.map((w, i) => (
-              <div key={w} className={`py-1 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-gray-400"}`}>{w}</div>
+              <div key={w} className={`py-1 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-lab-muted"}`}>{w}</div>
             ))}
           </div>
           <div className="grid grid-cols-7 gap-0.5">
@@ -109,8 +109,8 @@ export default function DatePicker({
                     selected
                       ? "bg-brand-600 text-white font-semibold"
                       : disabled
-                      ? "text-gray-200 cursor-not-allowed"
-                      : `hover:bg-brand-50 ${col === 0 ? "text-red-500" : col === 6 ? "text-blue-500" : "text-gray-700"}`
+                      ? "text-[#d9d4c8] cursor-not-allowed"
+                      : `hover:bg-brand-50 ${col === 0 ? "text-red-500" : col === 6 ? "text-blue-500" : "text-lab-ink"}`
                   } ${isToday && !selected ? "ring-1 ring-brand-300" : ""}`}
                 >
                   {d}

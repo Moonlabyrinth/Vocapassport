@@ -71,11 +71,11 @@ export default function MonthlyTab({ app }: { app: AppStateHook }) {
                 key={t.id}
                 onClick={() => { setSelectedId(t.id === selectedId ? "" : t.id); setEditing(false); }}
                 className={`text-left rounded-xl border px-4 py-2.5 transition ${
-                  t.id === selectedId ? "border-brand-600 bg-brand-50" : "border-gray-200 hover:border-gray-300"
+                  t.id === selectedId ? "border-brand-600 bg-brand-50" : "border-lab-line hover:border-lab-line"
                 }`}
               >
-                <div className="font-medium text-gray-800">{t.name}</div>
-                <div className="text-xs text-gray-500 mt-0.5">
+                <div className="font-medium text-lab-ink">{t.name}</div>
+                <div className="text-xs text-lab-muted mt-0.5">
                   {t.date} · {monthlyClassLabel(t, db.classes)} · 영역 {t.sections.length} · 만점 {monthlyMaxTotal(t)}
                 </div>
               </button>
@@ -177,26 +177,26 @@ function TestEditor({ app, test, onDone }: { app: AppStateHook; test: MonthlyTes
         <Field label="날짜"><DatePicker value={date} onChange={setDate} /></Field>
       </div>
       <Field label="적용 반" hint="여러 반이 같은 영역을 보면 함께 선택하세요. 아무 반도 선택하지 않으면 전체 공통입니다.">
-        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+        <div className="rounded-xl border border-lab-line bg-lab-paper px-3 py-2">
           <div className="flex flex-wrap gap-2">
-            <label className="inline-flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1.5 text-sm text-gray-700">
+            <label className="inline-flex items-center gap-2 rounded-lg bg-[#f1ede2] px-3 py-1.5 text-sm text-lab-ink">
               <input
                 type="checkbox"
                 checked={classIds.length === 0}
                 onChange={(e) => {
                   if (e.target.checked) setClassIds([]);
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                className="h-4 w-4 rounded border-lab-line text-brand-600"
               />
               전체 공통
             </label>
             {db.classes.map((c) => (
-              <label key={c.id} className="inline-flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1.5 text-sm text-gray-700">
+              <label key={c.id} className="inline-flex items-center gap-2 rounded-lg bg-[#f1ede2] px-3 py-1.5 text-sm text-lab-ink">
                 <input
                   type="checkbox"
                   checked={classIds.includes(c.id)}
                   onChange={(e) => toggleClass(c.id, e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                  className="h-4 w-4 rounded border-lab-line text-brand-600"
                 />
                 {c.name}
               </label>
@@ -204,7 +204,7 @@ function TestEditor({ app, test, onDone }: { app: AppStateHook; test: MonthlyTes
           </div>
         </div>
       </Field>
-      <div className="text-sm font-medium text-gray-600 mb-2">영역 (이름 · 만점)</div>
+      <div className="text-sm font-medium text-lab-muted mb-2">영역 (이름 · 만점)</div>
       <div className="space-y-2">
         {drafts.map((d, i) => (
           <div key={i} className="grid grid-cols-1 sm:grid-cols-[minmax(16rem,1fr)_7rem_auto] gap-2 items-center">
@@ -318,31 +318,31 @@ function ScoreGrid({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
             <thead>
-              <tr className="text-left text-gray-400 border-b border-gray-100">
-                <th className="py-2 pr-3 font-medium sticky left-0 bg-white">학생</th>
+              <tr className="text-left text-lab-muted border-b border-lab-line">
+                <th className="py-2 pr-3 font-medium sticky left-0 bg-lab-paper">학생</th>
                 {test.sections.map((s) => (
-                  <th key={s.key} className="py-2 px-2 font-medium text-center">{s.label}<div className="text-[10px] text-gray-300">/{s.maxScore}</div></th>
+                  <th key={s.key} className="py-2 px-2 font-medium text-center">{s.label}<div className="text-[10px] text-[#bdb7a9]">/{s.maxScore}</div></th>
                 ))}
-                <th className="py-2 pl-3 font-medium text-center">총점<div className="text-[10px] text-gray-300">/{monthlyMaxTotal(test)} · 백점환산</div></th>
+                <th className="py-2 pl-3 font-medium text-center">총점<div className="text-[10px] text-[#bdb7a9]">/{monthlyMaxTotal(test)} · 백점환산</div></th>
               </tr>
             </thead>
             <tbody>
               {students.map((s) => (
-                <tr key={s.id} className="border-b border-gray-50">
-                  <td className="py-1.5 pr-3 font-medium text-gray-800 sticky left-0 bg-white">{s.name}</td>
+                <tr key={s.id} className="border-b border-lab-line">
+                  <td className="py-1.5 pr-3 font-medium text-lab-ink sticky left-0 bg-lab-paper">{s.name}</td>
                   {test.sections.map((sec) => (
                     <td key={sec.key} className="py-1.5 px-1.5 text-center">
                       <input
                         type="number" min={0} max={sec.maxScore} step={0.5}
                         value={draft[s.id]?.[sec.key] ?? ""}
                         onChange={(e) => setCell(s.id, sec.key, e.target.value)}
-                        className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-center text-sm focus:border-brand-600 outline-none"
+                        className="w-16 rounded-lg border border-lab-line px-2 py-1 text-center text-sm focus:border-brand-600 outline-none"
                       />
                     </td>
                   ))}
                   <td className="py-1.5 pl-3 text-center font-semibold text-brand-700">
                     <div>{round1(rowTotal(s.id))} / {monthlyMaxTotal(test)}</div>
-                    <div className="text-xs font-medium text-gray-400">백점환산 {rowConvertedScore(s.id) ?? "-"}점</div>
+                    <div className="text-xs font-medium text-lab-muted">백점환산 {rowConvertedScore(s.id) ?? "-"}점</div>
                   </td>
                 </tr>
               ))}
@@ -350,7 +350,7 @@ function ScoreGrid({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
           </table>
         </div>
       )}
-      <p className="text-xs text-gray-400 mt-2">빈 칸은 미입력으로 저장됩니다. 입력 후 「저장」을 눌러주세요.</p>
+      <p className="text-xs text-lab-muted mt-2">빈 칸은 미입력으로 저장됩니다. 입력 후 「저장」을 눌러주세요.</p>
     </Card>
   );
 }
@@ -398,7 +398,7 @@ function MonthlyStats({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-100">
+            <tr className="text-left text-lab-muted border-b border-lab-line">
               <th className="py-2 pr-3 font-medium">영역</th>
               <th className="py-2 pr-3 font-medium">평균</th>
               <th className="py-2 pr-3 font-medium">만점</th>
@@ -406,10 +406,10 @@ function MonthlyStats({ app, test }: { app: AppStateHook; test: MonthlyTest }) {
           </thead>
           <tbody>
             {sectionAvgs.map(({ sec, avg }) => (
-              <tr key={sec.key} className="border-b border-gray-50">
-                <td className="py-2 pr-3 text-gray-800">{sec.label}</td>
-                <td className="py-2 pr-3 font-medium text-gray-700">{avg != null ? avg : "-"}</td>
-                <td className="py-2 pr-3 text-gray-400">{sec.maxScore}</td>
+              <tr key={sec.key} className="border-b border-lab-line">
+                <td className="py-2 pr-3 text-lab-ink">{sec.label}</td>
+                <td className="py-2 pr-3 font-medium text-lab-ink">{avg != null ? avg : "-"}</td>
+                <td className="py-2 pr-3 text-lab-muted">{sec.maxScore}</td>
               </tr>
             ))}
           </tbody>
@@ -467,11 +467,11 @@ function TrendCard({ app }: { app: AppStateHook }) {
       <div style={{ width: "100%", height: 240 }}>
         <ResponsiveContainer>
           <LineChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eef0f4" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e8e2d6" />
             <XAxis dataKey="name" fontSize={12} tickMargin={6} />
             <YAxis domain={[0, 100]} fontSize={12} unit="점" />
             <Tooltip formatter={(v: number) => `${v}점`} />
-            <Line type="monotone" dataKey="pct" name="백점환산" stroke="#7c3aed" strokeWidth={2} connectNulls dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="pct" name="백점환산" stroke="#2f4054" strokeWidth={2} connectNulls dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>

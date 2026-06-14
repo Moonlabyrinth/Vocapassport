@@ -42,7 +42,7 @@ export default function RetestScheduler({
   return (
     <div className="space-y-4">
       <div className="bg-red-50 rounded-xl p-3 text-sm">
-        <span className="font-medium text-gray-800">{student?.name}</span> 님 ·{" "}
+        <span className="font-medium text-lab-ink">{student?.name}</span> 님 ·{" "}
         {record.bookTitle} · {recordLessonLabel(record)}
         {record.retestNo > 0 && <> · 재시험 {record.retestNo}회차</>}
         <div className="mt-1 flex items-center gap-2">
@@ -65,11 +65,11 @@ export default function RetestScheduler({
         </Field>
       </div>
 
-      <div className="text-sm text-gray-600">
+      <div className="text-sm text-lab-muted">
         예약: <b>{formatDateTime(iso)}</b>
         {isPast && <span className="text-red-500 ml-2">⚠ 지난 시각</span>}
       </div>
-      <div className="text-xs text-gray-400">
+      <div className="text-xs text-lab-muted">
         ※ 예약 24시간 전·2시간 전 알림은 클라우드 배포(2단계) 후 휴대폰 푸시로 전송됩니다. 현재는 재시험 현황에서 일정과 남은 시간을 확인할 수 있습니다.
       </div>
 

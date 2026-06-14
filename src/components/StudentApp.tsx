@@ -244,8 +244,8 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                   {needScheduling.map((r) => (
                     <li key={r.id} className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50 px-4 py-3">
                       <div className="text-sm">
-                        <div className="font-medium text-gray-800">{r.bookTitle}</div>
-                        <div className="text-gray-500">
+                        <div className="font-medium text-lab-ink">{r.bookTitle}</div>
+                        <div className="text-lab-muted">
                           {recordLessonLabel(r)} · {r.actualScore}/{r.totalScore} · 컷 {cutLabel(r)} 미달
                         </div>
                       </div>
@@ -267,10 +267,10 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                     const soon = new Date(rt.scheduledAt).getTime() - Date.now() < 2 * 3600 * 1000;
                     const past = new Date(rt.scheduledAt).getTime() < Date.now();
                     return (
-                      <li key={rt.id} className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3">
+                      <li key={rt.id} className="flex items-center justify-between rounded-xl border border-lab-line px-4 py-3">
                         <div className="text-sm">
-                          <div className="font-medium text-gray-800">{formatDateTime(rt.scheduledAt)}</div>
-                          <div className="text-gray-500">{origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : ""}</div>
+                          <div className="font-medium text-lab-ink">{formatDateTime(rt.scheduledAt)}</div>
+                          <div className="text-lab-muted">{origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : ""}</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge color={past ? "red" : soon ? "amber" : "blue"}>{relativeFromNow(rt.scheduledAt)}</Badge>
@@ -283,7 +283,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                   })}
                 </ul>
               )}
-              <p className="text-xs text-gray-400 mt-3">
+              <p className="text-xs text-lab-muted mt-3">
                 ※ 예약 24시간 전·2시간 전 알림은 추후 휴대폰 푸시로 제공됩니다. (현재는 일정·남은시간 표시)
               </p>
             </Card>
@@ -314,7 +314,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-gray-400 border-b border-gray-100">
+                      <tr className="text-left text-lab-muted border-b border-lab-line">
                         <th className="py-2 pr-3 font-medium">날짜</th>
                         <th className="py-2 pr-3 font-medium">책</th>
                         <th className="py-2 pr-3 font-medium">회독</th>
@@ -324,11 +324,11 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                     </thead>
                     <tbody>
                       {[...records].sort((a, b) => `${b.examDate}${b.createdAt}`.localeCompare(`${a.examDate}${a.createdAt}`)).map((r) => (
-                        <tr key={r.id} className="border-b border-gray-50">
-                          <td className="py-2 pr-3 text-gray-500">{r.examDate.slice(5)}</td>
-                          <td className="py-2 pr-3 text-gray-700">{r.bookTitle}</td>
-                          <td className="py-2 pr-3 text-gray-500">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</td>
-                          <td className="py-2 pr-3 text-gray-700">{r.isAbsent ? "결석" : `${r.actualScore}/${r.totalScore}`}</td>
+                        <tr key={r.id} className="border-b border-lab-line">
+                          <td className="py-2 pr-3 text-lab-muted">{r.examDate.slice(5)}</td>
+                          <td className="py-2 pr-3 text-lab-ink">{r.bookTitle}</td>
+                          <td className="py-2 pr-3 text-lab-muted">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</td>
+                          <td className="py-2 pr-3 text-lab-ink">{r.isAbsent ? "결석" : `${r.actualScore}/${r.totalScore}`}</td>
                           <td className="py-2">
                             {r.isAbsent ? (
                               <Badge color="gray">결석</Badge>
@@ -367,10 +367,10 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                   const max = monthlyMaxTotal(t);
                   const pct = round1(monthlyPercent(res.scores, t));
                   return (
-                    <div key={t.id} className="rounded-xl border border-gray-100 p-3">
+                    <div key={t.id} className="rounded-xl border border-lab-line p-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-                        <div className="text-lg font-semibold text-gray-800">
-                          {t.name} <span className="text-sm font-normal text-gray-400">· {t.date}</span>
+                        <div className="text-lg font-semibold text-lab-ink">
+                          {t.name} <span className="text-sm font-normal text-lab-muted">· {t.date}</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Badge color="indigo" size="lg">총점 {round1(total)} / {max}</Badge>
@@ -379,8 +379,8 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {t.sections.map((s) => (
-                          <span key={s.key} className="text-sm bg-gray-50 rounded-lg px-3 py-1.5 text-gray-600">
-                            {s.label} <b className="text-base text-gray-800">{res.scores[s.key] ?? "-"}</b>/{s.maxScore}
+                          <span key={s.key} className="text-sm bg-[#f1ede2] rounded-lg px-3 py-1.5 text-lab-muted">
+                            {s.label} <b className="text-base text-lab-ink">{res.scores[s.key] ?? "-"}</b>/{s.maxScore}
                           </span>
                         ))}
                       </div>

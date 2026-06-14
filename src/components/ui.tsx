@@ -50,7 +50,7 @@ export function Button({
   const sizes = size === "sm" ? "px-3 py-1.5 text-sm" : "px-4 py-2.5 text-base";
   const variants: Record<BtnVariant, string> = {
     primary: "bg-brand-600 text-white hover:bg-brand-700",
-    ghost: "bg-transparent text-gray-600 hover:bg-gray-100",
+    ghost: "bg-transparent text-lab-muted hover:bg-[#e9e3d6]",
     soft: "bg-brand-50 text-brand-700 hover:bg-brand-100",
     danger: "bg-red-50 text-red-600 hover:bg-red-100",
     navy: "bg-lab-navy text-white hover:bg-lab-navy-deep hover:-translate-y-px shadow-lab-sm",

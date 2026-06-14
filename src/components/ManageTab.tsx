@@ -78,11 +78,11 @@ export default function ManageTab({ app }: { app: AppStateHook }) {
                   key={c.id}
                   onClick={() => setSelectedClass(active ? "" : c.id)}
                   className={`text-left rounded-xl border px-4 py-2.5 transition ${
-                    active ? "border-brand-600 bg-brand-50" : "border-gray-200 hover:border-gray-300"
+                    active ? "border-brand-600 bg-brand-50" : "border-lab-line hover:border-lab-line"
                   }`}
                 >
-                  <div className="font-medium text-gray-800">{c.name}</div>
-                  <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                  <div className="font-medium text-lab-ink">{c.name}</div>
+                  <div className="text-xs text-lab-muted mt-0.5 flex items-center gap-1">
                     <Badge color="blue">{c.scheduleType}</Badge>
                     <Badge color="indigo">컷 {c.passThreshold}%</Badge>
                     <span>재원 {activeCount}명</span>
@@ -149,7 +149,7 @@ function AchievementPeriodSettings({ app }: { app: AppStateHook }) {
     >
       {!expanded ? (
         <div className="space-y-3">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-lab-muted">
             현재 성취 평가 기간입니다. 일정이 밀리면 열어서 개강일과 종강일을 수정하세요.
           </p>
           <div className="flex flex-wrap gap-2">
@@ -162,17 +162,17 @@ function AchievementPeriodSettings({ app }: { app: AppStateHook }) {
         </div>
       ) : (
         <>
-          <p className="mb-3 text-sm text-gray-500">
+          <p className="mb-3 text-sm text-lab-muted">
             방학, 휴강, 보강으로 일정이 밀리면 여기서 개강일과 종강일을 수정하세요.
             학생 리포트와 통계 화면이 이 날짜 기준으로 다시 계산됩니다.
           </p>
           <div className="space-y-3">
             {drafts.map((period, index) => (
-              <div key={period.key} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div key={period.key} className="rounded-xl border border-lab-line bg-[#f1ede2] p-3">
                 <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="font-semibold text-gray-800">{period.label}</div>
-                    <div className="text-sm text-gray-400">{achievementRangeLabel(period)}</div>
+                    <div className="font-semibold text-lab-ink">{period.label}</div>
+                    <div className="text-sm text-lab-muted">{achievementRangeLabel(period)}</div>
                   </div>
                   <Badge color={period.passGoal >= period.targetTests ? "amber" : "green"}>
                     {period.targetTests}회 중 {period.passGoal}회 통과
@@ -361,7 +361,7 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
     >
       {!expanded ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-lab-muted">
             입력한 점수, 날짜, 책, 회독/회차, 판정을 찾아 수정하거나 삭제할 때 열어 사용하세요.
           </p>
           <Badge color={db.records.length ? "indigo" : "gray"}>전체 기록 {db.records.length}건</Badge>
@@ -434,13 +434,13 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
             <thead>
-              <tr className="text-left text-gray-400 border-b border-gray-100">
+              <tr className="text-left text-lab-muted border-b border-lab-line">
                 <th className="py-2 pr-3 font-medium">
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={(e) => setSelectedIds(e.target.checked ? new Set(visibleIds) : new Set())}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                    className="h-4 w-4 rounded border-lab-line text-brand-600"
                     aria-label="검색된 성적 전체 선택"
                   />
                 </th>
@@ -459,25 +459,25 @@ function ScoreRecordManager({ app }: { app: AppStateHook }) {
                 const cls = db.classes.find((c) => c.id === r.classId);
                 const pct = r.isAbsent ? null : round1(percentOf(r.actualScore, r.totalScore));
                 return (
-                  <tr key={r.id} className="border-b border-gray-50">
+                  <tr key={r.id} className="border-b border-lab-line">
                     <td className="py-2 pr-3">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(r.id)}
                         onChange={(e) => toggleRecord(r.id, e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                        className="h-4 w-4 rounded border-lab-line text-brand-600"
                         aria-label="성적 기록 선택"
                       />
                     </td>
-                    <td className="py-2 pr-3 text-gray-500">{r.examDate}</td>
-                    <td className="py-2 pr-3 text-gray-500">{cls?.name ?? "-"}</td>
-                    <td className="py-2 pr-3 text-gray-800">{student?.name ?? "-"}</td>
-                    <td className="py-2 pr-3 text-gray-600">
+                    <td className="py-2 pr-3 text-lab-muted">{r.examDate}</td>
+                    <td className="py-2 pr-3 text-lab-muted">{cls?.name ?? "-"}</td>
+                    <td className="py-2 pr-3 text-lab-ink">{student?.name ?? "-"}</td>
+                    <td className="py-2 pr-3 text-lab-muted">
                       <div>{r.bookTitle}</div>
-                      <div className="text-xs text-gray-400">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</div>
+                      <div className="text-xs text-lab-muted">{recordLessonLabel(r)}{r.retestNo > 0 ? ` · 재${r.retestNo}` : ""}</div>
                     </td>
-                    <td className="py-2 pr-3 text-gray-700">
-                      {r.isAbsent ? "결석" : <>{r.actualScore}/{r.totalScore} <span className="text-xs text-gray-400">({pct}%)</span></>}
+                    <td className="py-2 pr-3 text-lab-ink">
+                      {r.isAbsent ? "결석" : <>{r.actualScore}/{r.totalScore} <span className="text-xs text-lab-muted">({pct}%)</span></>}
                     </td>
                     <td className="py-2 pr-3">
                       {recordBadge(r)}
@@ -617,8 +617,8 @@ function EditScoreRecordModal({
   return (
     <Modal open={true} onClose={onClose} title="성적 기록 수정" width="max-w-2xl">
       <div className="space-y-4">
-        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          <div className="font-semibold text-gray-800">{student?.name ?? "학생 정보 없음"}</div>
+        <div className="rounded-xl border border-lab-line bg-[#f1ede2] px-4 py-3 text-sm text-lab-muted">
+          <div className="font-semibold text-lab-ink">{student?.name ?? "학생 정보 없음"}</div>
           <div className="mt-0.5">{cls?.name ?? "반 정보 없음"} · 기존 {recordLessonLabel(record)}</div>
         </div>
 
@@ -686,7 +686,7 @@ function EditScoreRecordModal({
           </Field>
 
           <Field label="결석 여부" hint="결석은 평균 점수 계산에서 제외됩니다.">
-            <label className="flex h-[46px] items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-base text-gray-700">
+            <label className="flex h-[46px] items-center gap-2 rounded-xl border border-lab-line bg-lab-paper px-3 text-base text-lab-ink">
               <input
                 type="checkbox"
                 checked={isAbsent}
@@ -694,7 +694,7 @@ function EditScoreRecordModal({
                   setIsAbsent(e.target.checked);
                   if (e.target.checked) setActualScore("");
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                className="h-4 w-4 rounded border-lab-line text-brand-600"
               />
               결석
             </label>
@@ -948,13 +948,13 @@ function BulkField({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`rounded-xl border p-3 ${enabled ? "border-brand-100 bg-brand-50/40" : "border-gray-100 bg-gray-50"}`}>
-      <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
+    <div className={`rounded-xl border p-3 ${enabled ? "border-brand-100 bg-brand-50/40" : "border-lab-line bg-[#f1ede2]"}`}>
+      <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-lab-ink">
         <input
           type="checkbox"
           checked={enabled}
           onChange={(e) => onToggle(e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 text-brand-600"
+          className="h-4 w-4 rounded border-lab-line text-brand-600"
         />
         {label}
       </label>
@@ -1151,22 +1151,22 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
             />
             <Button onClick={addStudent}>추가</Button>
           </div>
-          <p className="text-xs text-gray-400 mb-3">아이디는 <b>이름</b>, 초기 비밀번호는 <b>0000</b>으로 자동 발급됩니다. (이름이 겹치면 뒤에 숫자가 붙어요)</p>
+          <p className="text-xs text-lab-muted mb-3">아이디는 <b>이름</b>, 초기 비밀번호는 <b>0000</b>으로 자동 발급됩니다. (이름이 겹치면 뒤에 숫자가 붙어요)</p>
           {students.length === 0 ? (
             <EmptyState>학생을 추가하세요.</EmptyState>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-lab-line">
               {students.map((s) => {
                 const active = isActiveStudent(s);
                 return (
                 <li key={s.id} className="flex items-center justify-between py-2 gap-2">
                   <div className="min-w-0">
-                    <div className="text-sm text-gray-800 flex items-center gap-2">
+                    <div className="text-sm text-lab-ink flex items-center gap-2">
                       <span>{s.name}</span>
                       {!active && <Badge color="gray">퇴원</Badge>}
                     </div>
-                    <div className="text-xs text-gray-400">
-                      {s.loginId ? <>아이디 <span className="font-mono text-gray-600">{s.loginId}</span></> : <span className="text-amber-500">계정 미발급</span>}
+                    <div className="text-xs text-lab-muted">
+                      {s.loginId ? <>아이디 <span className="font-mono text-lab-muted">{s.loginId}</span></> : <span className="text-amber-500">계정 미발급</span>}
                       {!active && s.withdrawnAt && <span className="ml-2">퇴원일 {s.withdrawnAt.slice(0, 10)}</span>}
                     </div>
                   </div>
@@ -1222,16 +1222,16 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
               <Button onClick={addBook} className="w-full">+ 책 추가</Button>
             </div>
           </div>
-          <p className="text-xs text-gray-400 mb-3">통과 점수(절대)를 넣으면 그 점수 이상이면 통과합니다. (백분율 컷보다 우선)</p>
+          <p className="text-xs text-lab-muted mb-3">통과 점수(절대)를 넣으면 그 점수 이상이면 통과합니다. (백분율 컷보다 우선)</p>
           {books.length === 0 ? (
             <EmptyState>책을 추가하면 점수 입력이 편해집니다.</EmptyState>
           ) : (
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-lab-line">
               {books.map((b) => (
                 <li key={b.id} className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-800">
+                  <span className="text-sm text-lab-ink">
                     {b.title}{" "}
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-lab-muted">
                       (만점 {b.defaultTotalScore} · 컷 {b.passMark != null ? `${b.passMark}점 이상` : `${b.passThreshold ?? cls.passThreshold}%`})
                     </span>
                   </span>
@@ -1253,14 +1253,14 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
 
       <Modal open={!!issued} onClose={() => setIssued(null)} title="학생 로그인 계정 발급됨">
         <div className="space-y-3">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-lab-muted">
             아래 <b>아이디</b>로 로그인합니다. 초기 비밀번호는 모두 <b>0000</b>이며,
             학생이 로그인 후 직접 변경하도록 안내하세요. (비번 분실 시 「비번 발급」으로 0000 재설정)
           </p>
-          <div className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="rounded-xl border border-lab-line overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 text-left text-gray-500">
+                <tr className="bg-[#f1ede2] text-left text-lab-muted">
                   <th className="py-2 px-3 font-medium">이름</th>
                   <th className="py-2 px-3 font-medium">아이디</th>
                   <th className="py-2 px-3 font-medium">비밀번호</th>
@@ -1268,9 +1268,9 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
               </thead>
               <tbody>
                 {(issued ?? []).map((c, i) => (
-                  <tr key={i} className="border-t border-gray-100">
-                    <td className="py-2 px-3 text-gray-800">{c.name}</td>
-                    <td className="py-2 px-3 font-mono text-gray-700">{c.loginId}</td>
+                  <tr key={i} className="border-t border-lab-line">
+                    <td className="py-2 px-3 text-lab-ink">{c.name}</td>
+                    <td className="py-2 px-3 font-mono text-lab-ink">{c.loginId}</td>
                     <td className="py-2 px-3 font-mono text-brand-700 font-semibold">{c.password}</td>
                   </tr>
                 ))}
@@ -1299,9 +1299,9 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
       >
         <div className="space-y-5">
           {selectableRetestRecordIds.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-lab-line bg-[#f1ede2] px-3 py-2">
               <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <label className="inline-flex items-center gap-2 text-sm text-lab-ink">
                   <input
                     type="checkbox"
                     checked={allRetestSelected}
@@ -1310,7 +1310,7 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
                         e.target.checked ? new Set(selectableRetestRecordIds) : new Set()
                       );
                     }}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                    className="h-4 w-4 rounded border-lab-line text-brand-600"
                   />
                   전체 선택
                 </label>
@@ -1340,13 +1340,13 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
 
           <section>
             <div className="flex items-center justify-between gap-2 mb-2">
-              <h3 className="text-sm font-semibold text-gray-800">재시험 필요 회차</h3>
+              <h3 className="text-sm font-semibold text-lab-ink">재시험 필요 회차</h3>
               <Badge color={retestNeeded.length ? "red" : "gray"}>{retestNeeded.length}건</Badge>
             </div>
             {retestNeeded.length === 0 ? (
               <EmptyState>현재 재시험이 필요한 회차가 없습니다.</EmptyState>
             ) : (
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-lab-line">
                 {retestNeeded.map((record) => (
                   <NeedsRetestRow
                     key={record.id}
@@ -1364,13 +1364,13 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
 
           <section>
             <div className="flex items-center justify-between gap-2 mb-2">
-              <h3 className="text-sm font-semibold text-gray-800">처리된 회차</h3>
+              <h3 className="text-sm font-semibold text-lab-ink">처리된 회차</h3>
               <Badge color={retestProcessed.length ? "green" : "gray"}>{retestProcessed.length}건</Badge>
             </div>
             {retestProcessed.length === 0 ? (
               <EmptyState>선생님이 직접 통과·면제·미통과로 처리한 회차가 여기 표시됩니다.</EmptyState>
             ) : (
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-lab-line">
                 {retestProcessed.map((record) => (
                   <NeedsRetestRow
                     key={record.id}
@@ -1388,13 +1388,13 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
 
           <section>
             <div className="flex items-center justify-between gap-2 mb-2">
-              <h3 className="text-sm font-semibold text-gray-800">지난 재시험 결과</h3>
+              <h3 className="text-sm font-semibold text-lab-ink">지난 재시험 결과</h3>
               <Badge color="gray">{retestHistory.length}건</Badge>
             </div>
             {retestHistory.length === 0 ? (
               <EmptyState>지난 재시험 결과가 없습니다.</EmptyState>
             ) : (
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-lab-line">
                 {retestHistory.map((rt) => (
                   <RetestHistoryRow
                     key={rt.id}

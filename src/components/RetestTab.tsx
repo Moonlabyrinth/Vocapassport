@@ -41,7 +41,7 @@ export function PassKindSelect({
         const v = e.target.value;
         if (v !== "passgeneric") onChoose(v as PassKindChoice);
       }}
-      className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white focus:border-brand-600 outline-none"
+      className="rounded-lg border border-lab-line px-2 py-1.5 text-xs bg-lab-paper focus:border-brand-600 outline-none"
       aria-label="통과 판정 선택"
     >
       <option value="auto">자동 판정</option>
@@ -120,14 +120,14 @@ export default function RetestTab({ app }: { app: AppStateHook }) {
       {history.length > 0 && (
         <Card title="지난 재시험">
           {selectableIds.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded-xl bg-gray-50 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded-xl bg-[#f1ede2] px-3 py-2">
               <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 text-sm text-gray-600">
+                <label className="flex items-center gap-1.5 text-sm text-lab-muted">
                   <input
                     type="checkbox"
                     checked={allSelected}
                     onChange={(e) => setSelectedIds(e.target.checked ? new Set(selectableIds) : new Set())}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                    className="h-4 w-4 rounded border-lab-line text-brand-600"
                   />
                   전체 선택
                 </label>
@@ -142,7 +142,7 @@ export default function RetestTab({ app }: { app: AppStateHook }) {
               </div>
             </div>
           )}
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-lab-line">
             {history.map((rt) => (
               <RetestHistoryRow
                 key={rt.id}
@@ -201,15 +201,15 @@ export function RetestHistoryRow({
           type="checkbox"
           checked={selection.checked}
           onChange={(e) => selection.onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 text-brand-600"
+          className="h-4 w-4 rounded border-lab-line text-brand-600"
           aria-label="재시험 결과 선택"
         />
       )}
       <div className="min-w-0">
-        <div className="font-medium text-gray-800">
-          {st?.name} <span className="text-xs text-gray-400">· {formatDateTime(rt.scheduledAt)}</span>
+        <div className="font-medium text-lab-ink">
+          {st?.name} <span className="text-xs text-lab-muted">· {formatDateTime(rt.scheduledAt)}</span>
         </div>
-        <div className="text-xs text-gray-500 mt-0.5">
+        <div className="text-xs text-lab-muted mt-0.5">
           {origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : "재시험"}
         </div>
       </div>
@@ -261,15 +261,15 @@ export function NeedsRetestRow({
           type="checkbox"
           checked={selection.checked}
           onChange={(e) => selection.onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 text-brand-600"
+          className="h-4 w-4 rounded border-lab-line text-brand-600"
           aria-label="재시험 필요 회차 선택"
         />
       )}
       <div className="min-w-0">
-        <div className="font-medium text-gray-800">
-          {st?.name} <span className="text-xs text-gray-400">· {cls?.name} · {record.examDate}</span>
+        <div className="font-medium text-lab-ink">
+          {st?.name} <span className="text-xs text-lab-muted">· {cls?.name} · {record.examDate}</span>
         </div>
-        <div className="text-xs text-gray-500 mt-0.5">
+        <div className="text-xs text-lab-muted mt-0.5">
           {record.bookTitle} · {recordLessonLabel(record)}
           {record.retestNo > 0 ? ` · 재시험 ${record.retestNo + 1}회차 필요` : ""}
         </div>
@@ -306,17 +306,17 @@ function RetestRow({
   const past = new Date(rt.scheduledAt).getTime() < Date.now();
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 px-4 py-3">
+    <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-lab-line px-4 py-3">
       <div>
-        <div className="font-medium text-gray-800">
-          {st?.name} <span className="text-xs text-gray-400">· {cls?.name}</span>
+        <div className="font-medium text-lab-ink">
+          {st?.name} <span className="text-xs text-lab-muted">· {cls?.name}</span>
         </div>
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-lab-muted">
           {origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : ""}
           {origin && origin.retestNo > 0 ? ` · 재시험 ${origin.retestNo + 1}회차` : ""}
         </div>
         <div className="text-sm mt-1 flex items-center gap-2">
-          <span className="text-gray-700">{formatDateTime(rt.scheduledAt)}</span>
+          <span className="text-lab-ink">{formatDateTime(rt.scheduledAt)}</span>
           <Badge color={past ? "red" : soon ? "amber" : "blue"}>{relativeFromNow(rt.scheduledAt)}</Badge>
         </div>
       </div>
@@ -403,7 +403,7 @@ function ResultEntry({
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-gray-600">
+      <div className="text-sm text-lab-muted">
         <b>{st?.name}</b> · {origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : ""}
       </div>
       <div className="grid grid-cols-2 gap-3">
