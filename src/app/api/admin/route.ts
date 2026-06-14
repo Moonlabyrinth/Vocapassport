@@ -13,7 +13,20 @@ export const dynamic = "force-dynamic";
 type AdminOp =
   | { op: "createStudentsWithCreds"; classId: string; names: string[] }
   | { op: "issueCredentials"; studentId: string } // 비밀번호 초기화(재발급)
-  | { op: "setLoginId"; studentId: string; loginId: string };
+  | { op: "setLoginId"; studentId: string; loginId: string }
+  | { op: "issueGuardianCode"; studentId: string }; // 보호자 접속 코드 발급/재발급
+
+/** 헷갈리는 글자(0/O/1/I/L) 제외한 6자리 보호자 코드 (중복 회피) */
+function generateGuardianCode(db: Database): string {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const used = new Set(db.students.map((s) => s.guardianCode).filter(Boolean));
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let code = "";
+    for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    if (!used.has(code)) return code;
+  }
+  return `${Date.now().toString(36).toUpperCase().slice(-6)}`;
+}
 
 /** 학생 이름 기반 고유 로그인 아이디 (중복 시 숫자 접미사) */
 function uniqueLoginIdFromName(db: Database, name: string): string {
@@ -71,6 +84,13 @@ export async function POST(req: NextRequest) {
         s.passwordSalt = salt;
         s.mustChangePassword = true;
         return { ok: true, loginId: s.loginId, password };
+      }
+      case "issueGuardianCode": {
+        const s = db.students.find((x) => x.id === body.studentId);
+        if (!s) return { ok: false, error: "학생을 찾을 수 없습니다." };
+        const guardianCode = generateGuardianCode(db);
+        s.guardianCode = guardianCode;
+        return { ok: true, guardianCode };
       }
       case "setLoginId": {
         const s = db.students.find((x) => x.id === body.studentId);

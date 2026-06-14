@@ -3,6 +3,7 @@ import { getDB } from "@/lib/db";
 import {
   achievementRangeLabel,
   computeAchievementPeriodStats,
+  computeGrowthDelta,
   isActiveStudent,
   isDateInRange,
   resolveAchievementPeriods,
@@ -27,6 +28,8 @@ interface LeaderboardEntry {
   perfectCount: number;
   currentPerfectStreak: number;
   allPassBonusEarned: boolean;
+  /** RISING(성장왕) 전용 — 성장폭(점). 성장왕 카드에서만 채워짐 */
+  growthDelta?: number;
 }
 
 function seoulTodayKey(): string {
@@ -111,7 +114,7 @@ export async function GET() {
   const periods = resolveAchievementPeriods(db.settings);
   const period = pickPeriod(periods, db.records);
   const activeStudents = db.students.filter(isActiveStudent);
-  const entries = activeStudents
+  const rows = activeStudents
     .map((student) => {
       const cls = db.classes.find((item) => item.id === student.classId);
       const records = db.records.filter(
@@ -122,14 +125,27 @@ export async function GET() {
           isDateInRange(record.examDate, period.startDate, period.endDate)
       );
       const stats = computeAchievementPeriodStats(records, period);
-      return toEntry(student.name, cls?.name ?? "", stats);
+      return { entry: toEntry(student.name, cls?.name ?? "", stats), growth: computeGrowthDelta(records) };
     })
-    .filter((entry) => entry.total > 0);
+    .filter((row) => row.entry.total > 0);
 
+  const entries = rows.map((row) => row.entry);
   const ranked = [...entries].sort(byWordKing).slice(0, 5);
   const wordKing = ranked[0] ?? null;
   const streakKing = [...entries].sort(byStreak).find((entry) => entry.currentPassStreak > 0) ?? null;
   const perfectKing = [...entries].sort(byPerfect).find((entry) => entry.perfectCount > 0) ?? null;
+
+  // RISING(성장왕): 성장폭 양수만 후보, growthDelta desc → 최근평균 desc → 응시수 desc
+  const growthKing =
+    rows
+      .filter((row) => row.growth && row.growth.growthDelta > 0)
+      .sort(
+        (a, b) =>
+          b.growth!.growthDelta - a.growth!.growthDelta ||
+          b.growth!.recentAvg - a.growth!.recentAvg ||
+          b.growth!.attempts - a.growth!.attempts
+      )
+      .map((row) => ({ ...row.entry, growthDelta: row.growth!.growthDelta }))[0] ?? null;
 
   return NextResponse.json({
     ok: true,
@@ -144,6 +160,7 @@ export async function GET() {
       wordKing,
       streakKing,
       perfectKing,
+      growthKing,
     },
     ranked,
   });

@@ -5,6 +5,7 @@ import { useAppState } from "@/lib/client";
 import Login from "@/components/Login";
 import TeacherApp from "@/components/TeacherApp";
 import StudentApp from "@/components/StudentApp";
+import GuardianApp from "@/components/GuardianApp";
 
 export default function Home() {
   const app = useAppState();
@@ -25,5 +26,6 @@ export default function Home() {
   }
   // ready
   if (app.role === "teacher") return <TeacherApp app={app} />;
+  if (app.role === "guardian") return <GuardianApp app={app} />;
   return <StudentApp app={app} />;
 }

@@ -19,6 +19,7 @@ interface LeaderboardEntry {
   perfectCount: number;
   currentPerfectStreak: number;
   allPassBonusEarned: boolean;
+  growthDelta?: number;
 }
 
 interface LeaderboardResponse {
@@ -78,13 +79,9 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    // 보호자 로그인은 STEP 2에서 제공 — UI만, 제출은 안내로 차단 (기존 인증 로직 변경 없음)
-    if (role === "guardian") {
-      setError("보호자 로그인은 준비 중입니다. 곧 제공될 예정이에요.");
-      return;
-    }
+    if (role === "guardian" && !loginId.trim()) return setError("자녀 이름을 입력하세요.");
     if (role === "student" && !loginId.trim()) return setError("아이디를 입력하세요.");
-    if (!password) return setError("비밀번호를 입력하세요.");
+    if (!password) return setError(role === "guardian" ? "인증코드를 입력하세요." : "비밀번호를 입력하세요.");
     setBusy(true);
     const r = await apiLogin(role, password, loginId);
     setBusy(false);
@@ -300,7 +297,7 @@ function LeftPanel({ data }: { data: LeaderboardResponse | null }) {
           no="04"
           label="RISING RANKER"
           entry={data?.highlights.growthKing}
-          sub={(e) => `점수 상승폭 1위${e.className ? ` · ${e.className}` : ""}`}
+          sub={(e) => `이번 달 +${e.growthDelta ?? 0}점 상승`}
           pendingSub="점수 상승폭 기준 선정"
         />
       </div>

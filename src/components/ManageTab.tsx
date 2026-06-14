@@ -1083,6 +1083,17 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
     setIssued([{ name, loginId: r.loginId, password: r.password }]);
   }
 
+  async function issueGuardianCode(studentId: string, name: string, regen: boolean) {
+    if (regen && !confirm(`'${name}' 학생의 보호자 접속 코드를 새로 발급할까요? (기존 코드는 무효)`)) return;
+    const r = await apiAdmin({ op: "issueGuardianCode", studentId });
+    if (!r.ok) return alert(r.error || "발급 실패");
+    await app.reload();
+    alert(
+      `'${name}' 보호자 접속 코드: ${r.guardianCode}\n\n` +
+        `학부모님께 로그인 화면 [보호자] 탭에서\n자녀 이름 「${name}」 + 위 코드로 접속하도록 안내하세요.`
+    );
+  }
+
   async function addBook() {
     if (!bookTitle.trim()) return alert("책 제목을 입력하세요.");
     const r = await run({
@@ -1169,6 +1180,16 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
                       {s.loginId ? <>아이디 <span className="font-mono text-lab-muted">{s.loginId}</span></> : <span className="text-amber-500">계정 미발급</span>}
                       {!active && s.withdrawnAt && <span className="ml-2">퇴원일 {s.withdrawnAt.slice(0, 10)}</span>}
                     </div>
+                    {active && (
+                      <div className="text-xs text-lab-muted mt-0.5">
+                        보호자코드{" "}
+                        {s.guardianCode ? (
+                          <span className="font-mono font-bold tracking-wider text-lab-navy">{s.guardianCode}</span>
+                        ) : (
+                          <span className="text-amber-500">미발급</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <Button
@@ -1182,6 +1203,11 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
                       재시험
                     </Button>
                     {active && <Button variant="soft" size="sm" onClick={() => resetPassword(s.id, s.name)}>비번 발급</Button>}
+                    {active && (
+                      <Button variant="ghost" size="sm" onClick={() => issueGuardianCode(s.id, s.name, !!s.guardianCode)}>
+                        {s.guardianCode ? "코드 재발급" : "보호자코드"}
+                      </Button>
+                    )}
                     <Button
                       variant={active ? "ghost" : "soft"}
                       size="sm"

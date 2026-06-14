@@ -316,6 +316,33 @@ export function round1(n: number | null): number | null {
   return Math.round(n * 10) / 10;
 }
 
+/**
+ * RISING(성장왕) 성장폭 — 명세 §13.
+ * 회차별 점수(%)를 시간순 정렬해 (뒤 절반 평균 − 앞 절반 평균)을 계산한다.
+ * - 면제/결석은 제외, 응시 2회 이상만 대상(미만이면 null).
+ * - 회차가 홀수면 가운데 1회는 앞/뒤 모두에서 빠진다(앞 half회 vs 뒤 half회).
+ * 반환: growthDelta(점=백분율 포인트), recentAvg(뒤 절반 평균), attempts(대상 회차 수).
+ */
+export function computeGrowthDelta(records: ScoreRecord[]): {
+  growthDelta: number;
+  recentAvg: number;
+  attempts: number;
+} | null {
+  const countable = sortChrono(records.filter((r) => !isExempt(r) && !isAbsent(r)));
+  const n = countable.length;
+  if (n < 2) return null;
+  const scores = countable.map((r) => percentOf(r.actualScore, r.totalScore));
+  const half = Math.floor(n / 2);
+  const avg = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
+  const earlyAvg = avg(scores.slice(0, half));
+  const recentAvg = avg(scores.slice(n - half));
+  return {
+    growthDelta: round1(recentAvg - earlyAvg) ?? 0,
+    recentAvg: round1(recentAvg) ?? 0,
+    attempts: n,
+  };
+}
+
 /** 기록의 컷 표시 문자열 (절대 점수면 "51점", 백분율이면 "85%") */
 export function cutLabel(r: { passMarkUsed?: number | null; thresholdUsed: number }): string {
   if (r.passMarkUsed != null) return `${r.passMarkUsed}점`;

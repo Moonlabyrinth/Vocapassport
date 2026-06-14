@@ -30,6 +30,12 @@ export interface Student {
   passwordSalt: string;
   /** 최초 로그인 시 비밀번호 변경 권장 플래그 */
   mustChangePassword: boolean;
+  /**
+   * 보호자 접속 코드 — 선생님이 학생별로 발급해 학부모에게 전달.
+   * 보호자는 [자녀 이름 + 이 코드]로 로그인해 자녀 데이터만 조회한다.
+   * 공유 목적의 저민감 코드라 평문 저장(학생 비밀번호와 별개). 미발급 시 빈 문자열/undefined.
+   */
+  guardianCode?: string;
 }
 
 /** 클라이언트로 보낼 때 비밀번호 필드를 제거한 학생 */

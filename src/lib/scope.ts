@@ -10,6 +10,13 @@ export function sanitizeStudent(s: Student): SafeStudent {
   return rest;
 }
 
+/** 본인/보호자 화면용: 비밀번호 + 보호자 코드까지 제거 (코드는 선생님만 봄) */
+function selfStudent(s: Student): SafeStudent {
+  const { guardianCode, ...rest } = sanitizeStudent(s);
+  void guardianCode;
+  return rest;
+}
+
 function publicSettings(settings: Settings | undefined): Settings {
   return {
     achievementPeriods: settings?.achievementPeriods,
@@ -46,7 +53,7 @@ export function studentView(db: Database, studentId: string): Database {
   const myTestIds = new Set(myMonthlyResults.map((r) => r.monthlyTestId));
   return {
     classes: myClass ? [myClass] : [],
-    students: [sanitizeStudent(me) as unknown as Student],
+    students: [selfStudent(me) as unknown as Student],
     books: db.books.filter((b) => b.classId === me.classId),
     records: db.records.filter((r) => r.studentId === studentId),
     retests: db.retests.filter((r) => r.studentId === studentId),
@@ -54,4 +61,13 @@ export function studentView(db: Database, studentId: string): Database {
     monthlyResults: myMonthlyResults,
     settings: publicSettings(db.settings),
   };
+}
+
+/**
+ * 보호자용: 연결된 자녀 1명의 데이터만. 스코핑 자체는 studentView와 동일하지만
+ * (다른 학생/반/설정 미포함) 의미를 분명히 하려고 별도 함수로 노출한다.
+ * 보호자 화면은 자동 집계 데이터만 표시(복습 단어·코멘트 없음).
+ */
+export function guardianView(db: Database, studentId: string): Database {
+  return studentView(db, studentId);
 }

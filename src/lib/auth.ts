@@ -143,6 +143,8 @@ export function authorizeAction(
 ): string | null {
   if (!sess) return "로그인이 필요합니다.";
   if (sess.role === "teacher") return null;
+  // 보호자: 조회 전용 — 모든 명령 거부
+  if (sess.role === "guardian") return "보호자 계정은 조회만 가능합니다.";
 
   // 학생 권한
   switch (action.type) {
