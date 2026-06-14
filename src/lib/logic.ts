@@ -308,14 +308,33 @@ export function isAbsent(r: Pick<ScoreRecord, "isAbsent">): boolean {
   return !!r.isAbsent;
 }
 
-/** 재시험으로 통과한 기록: 재시험 응시 기록이거나 통과 종류가 '재시험'으로 분류된 통과 */
-export function isRetestPass(r: Pick<ScoreRecord, "passed" | "passKind" | "attemptType" | "isAbsent">): boolean {
-  return !!r.passed && !isAbsent(r) && !isExempt(r) && (r.attemptType === "retest" || r.passKind === "retest");
+type PassClassifiable = Pick<
+  ScoreRecord,
+  "passed" | "passKind" | "attemptType" | "isAbsent" | "actualScore" | "totalScore" | "passMarkUsed" | "thresholdUsed"
+>;
+
+/** 기록의 실제 점수가 통과 컷을 충족하는지 (절대 점수 컷 우선, 없으면 백분율 컷) */
+export function scoreMeetsCut(r: Pick<ScoreRecord, "actualScore" | "totalScore" | "passMarkUsed" | "thresholdUsed">): boolean {
+  if (r.passMarkUsed != null) return r.actualScore + 1e-9 >= r.passMarkUsed;
+  return percentOf(r.actualScore, r.totalScore) + 1e-9 >= r.thresholdUsed;
 }
 
-/** 본시험/자동 통과: 재시험이 아닌 통과(자동 판정 통과 + 본시험 통과) */
-export function isMainPass(r: Pick<ScoreRecord, "passed" | "passKind" | "attemptType" | "isAbsent">): boolean {
-  return !!r.passed && !isAbsent(r) && !isExempt(r) && !isRetestPass(r);
+/**
+ * 본시험/자동 통과: '진짜' 본시험에서 통과한 경우만.
+ * - 재시험 응시/‘재시험 통과’ 분류 → 제외
+ * - 통과 종류를 '본시험'으로 명시했으면 인정
+ * - 그 외에는 실제 점수가 컷을 충족한 통과만 인정(컷 미달인데 수동 통과 처리된 건 재시험/보정으로 봄)
+ */
+export function isMainPass(r: PassClassifiable): boolean {
+  if (!r.passed || isAbsent(r) || isExempt(r)) return false;
+  if (r.attemptType === "retest" || r.passKind === "retest") return false;
+  return r.passKind === "main" || scoreMeetsCut(r);
+}
+
+/** 재시험/보정 통과: 통과했지만 본시험 통과가 아닌 것 (재시험·컷 미달 수동 통과 등) — 별도 집계 */
+export function isRetestPass(r: PassClassifiable): boolean {
+  if (!r.passed || isAbsent(r) || isExempt(r)) return false;
+  return !isMainPass(r);
 }
 
 export function computeStreaks(records: ScoreRecord[]): StreakStats {
