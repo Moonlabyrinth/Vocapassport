@@ -8,15 +8,16 @@ import {
   avgPercent,
   computeGrowthDelta,
   cutPercent,
-  defaultSeason,
+  defaultPeriodForView,
+  groupBySeason,
   isAbsent,
   isDateInRange,
   isExempt,
-  monthsWithData,
   percentOf,
+  resolveAchievementPeriods,
   round1,
-  SEASONS,
-  seasonsWithData,
+  seasonGroupHasData,
+  seasonRange,
   sortChrono,
 } from "@/lib/logic";
 import {
@@ -43,44 +44,53 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
   const child = db.students[0];
   const myClass = db.classes[0];
 
+  const periods = useMemo(() => resolveAchievementPeriods(db.settings), [db.settings]);
   const firstRecords = useMemo(
     () => db.records.filter((r) => r.status === "approved" && r.attemptType === "first"),
     [db.records]
   );
   const today = localDateKey();
 
-  // 학기 탭(봄/여름) — 기록 있는 학기만. 기본은 기록 있는 가장 최근 학기.
-  const seasonTabs = useMemo(() => seasonsWithData(SEASONS, firstRecords, today), [firstRecords, today]);
-  const [seasonKey, setSeasonKey] = useState<string>("");
-  const [month, setMonth] = useState<string>("all"); // "all" | "YYYY-MM"
-  useEffect(() => {
-    if (!seasonTabs.some((s) => s.key === seasonKey)) {
-      setSeasonKey(defaultSeason(SEASONS, firstRecords, today)?.key ?? seasonTabs[0]?.key ?? "");
-      setMonth("all");
-    }
-  }, [seasonTabs, firstRecords, today, seasonKey]);
-  const season = seasonTabs.find((s) => s.key === seasonKey) ?? seasonTabs[0] ?? null;
-
-  // 선택 학기 안의 월(기록 있는 달) 드롭다운
-  const months = useMemo(
-    () => (season ? monthsWithData(firstRecords, season.startDate, season.endDate) : []),
-    [firstRecords, season]
+  // 학기 그룹(봄/여름) — 기록 있는 학기만. 월 경계는 관리의 개강일/종강일(성취 구간) 기준.
+  const allGroups = useMemo(() => groupBySeason(periods), [periods]);
+  const groups = useMemo(() => {
+    const withData = allGroups.filter((g) => seasonGroupHasData(g, firstRecords, today));
+    return withData.length ? withData : allGroups.slice(0, 1);
+  }, [allGroups, firstRecords, today]);
+  const defaultPeriod = useMemo(
+    () => defaultPeriodForView(periods, firstRecords, today),
+    [periods, firstRecords, today]
   );
-  useEffect(() => {
-    if (month !== "all" && !months.some((m) => m.key === month)) setMonth("all");
-  }, [months, month]);
 
-  // 현재 조회 라벨(전체=학기명, 아니면 N월)
-  const scopeLabel = month === "all" ? season?.label ?? "이번 학기" : `${Number(month.slice(5, 7))}월`;
+  const [seasonLabel, setSeasonLabel] = useState<string>("");
+  const [periodKey, setPeriodKey] = useState<string>("all"); // "all" | period.key
+  useEffect(() => {
+    if (!groups.some((g) => g.seasonLabel === seasonLabel)) {
+      setSeasonLabel(defaultPeriod?.seasonLabel ?? groups[0]?.seasonLabel ?? "");
+      setPeriodKey("all");
+    }
+  }, [groups, defaultPeriod, seasonLabel]);
+  const group = groups.find((g) => g.seasonLabel === seasonLabel) ?? groups[0] ?? null;
+
+  // periodKey가 현재 학기에 없으면 전체로
+  useEffect(() => {
+    if (periodKey !== "all" && group && !group.periods.some((p) => p.key === periodKey)) setPeriodKey("all");
+  }, [group, periodKey]);
+
+  // 조회 대상 구간(전체=학기 내 모든 구간, 아니면 선택 구간 1개)
+  const activePeriods = useMemo(() => {
+    if (!group) return [];
+    return periodKey === "all" ? group.periods : group.periods.filter((p) => p.key === periodKey);
+  }, [group, periodKey]);
+
+  const selectedPeriod = group?.periods.find((p) => p.key === periodKey) ?? null;
+  const scopeLabel = periodKey === "all" ? group?.seasonLabel ?? "이번 학기" : selectedPeriod?.label ?? "";
+  const metaRange =
+    group && (periodKey === "all" ? seasonRange(group) : selectedPeriod ?? seasonRange(group));
 
   const data = useMemo(() => {
     const periodRecords = sortChrono(
-      firstRecords.filter((r) => {
-        if (!season) return false;
-        if (!isDateInRange(r.examDate, season.startDate, season.endDate)) return false;
-        if (month !== "all" && r.examDate.slice(0, 7) !== month) return false;
-        return true;
-      })
+      firstRecords.filter((r) => activePeriods.some((p) => isDateInRange(r.examDate, p.startDate, p.endDate)))
     );
     const countable = periodRecords.filter((r) => !isAbsent(r) && !isExempt(r));
     const passCount = countable.filter((r) => r.passed).length;
@@ -109,7 +119,7 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
       chart,
       records,
     };
-  }, [firstRecords, season, month]);
+  }, [firstRecords, activePeriods]);
 
   async function logout() {
     await apiLogout();
@@ -154,7 +164,7 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
           <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-lab-gold">보호자 리포트</div>
           <h1 className="mt-2 font-serif text-[24px] font-bold leading-snug text-lab-navy">{headline}</h1>
           <div className="mt-1.5 text-[13px] text-lab-muted">
-            {scopeLabel} · {season ? rangeText(season.startDate, season.endDate) : "기간 집계 중"} · 단어시험
+            {scopeLabel} · {metaRange ? rangeText(metaRange.startDate, metaRange.endDate) : "기간 집계 중"} · 단어시험
             {myClass?.name && (
               <span className="ml-1.5 rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-bold text-lab-navy">
                 {myClass.name}
@@ -163,41 +173,41 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
           </div>
         </div>
 
-        {/* 학기 탭(봄/여름) + 월 드롭다운 */}
-        {(seasonTabs.length > 1 || months.length > 1) && (
+        {/* 학기 탭(봄/여름) + 구간(개월차) 드롭다운 */}
+        {(groups.length > 1 || (group?.periods.length ?? 0) > 1) && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            {seasonTabs.length > 1 && (
+            {groups.length > 1 && (
               <div className="flex gap-1 rounded-full border border-lab-line bg-lab-paper p-1 shadow-lab-sm">
-                {seasonTabs.map((s) => {
-                  const on = s.key === season?.key;
+                {groups.map((g) => {
+                  const on = g.seasonLabel === group?.seasonLabel;
                   return (
                     <button
-                      key={s.key}
+                      key={g.seasonLabel}
                       type="button"
                       onClick={() => {
-                        setSeasonKey(s.key);
-                        setMonth("all");
+                        setSeasonLabel(g.seasonLabel);
+                        setPeriodKey("all");
                       }}
                       className={`min-w-[84px] rounded-full px-4 py-2 text-[13px] font-bold transition ${
                         on ? "bg-lab-navy text-white shadow-lab-sm" : "text-lab-muted hover:text-lab-navy"
                       }`}
                     >
-                      {s.label}
+                      {g.seasonLabel}
                     </button>
                   );
                 })}
               </div>
             )}
-            {months.length > 1 && (
+            {(group?.periods.length ?? 0) > 1 && (
               <select
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                aria-label="월 선택"
+                value={periodKey}
+                onChange={(e) => setPeriodKey(e.target.value)}
+                aria-label="구간 선택"
                 className="rounded-full border border-lab-line bg-lab-paper px-3.5 py-2 text-[13px] font-bold text-lab-navy shadow-lab-sm outline-none focus:border-lab-gold"
               >
-                <option value="all">전체 ({season?.label ?? "학기"})</option>
-                {months.map((m) => (
-                  <option key={m.key} value={m.key}>{m.label}</option>
+                <option value="all">전체 ({group?.seasonLabel ?? "학기"})</option>
+                {group?.periods.map((p) => (
+                  <option key={p.key} value={p.key}>{p.label}</option>
                 ))}
               </select>
             )}

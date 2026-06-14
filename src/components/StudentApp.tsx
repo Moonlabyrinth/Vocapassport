@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AppStateHook, apiChangePassword, apiLogout } from "@/lib/client";
 import { Button, Card, Badge, EmptyState, Stat, Modal, Field, Input } from "./ui";
 import {
@@ -155,6 +155,32 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
     return defaultPeriodForView(achievementPeriods, firstRecs, localDateKey())?.key;
   }, [records, achievementPeriods]);
 
+  // 학기(seasonLabel) 탭 — 봄/여름. 리포트의 월 탭은 선택 학기의 구간만 표시.
+  const reportSeasons = useMemo(() => {
+    const order: string[] = [];
+    for (const r of wordReports) {
+      const s = r.seasonLabel ?? "";
+      if (!order.includes(s)) order.push(s);
+    }
+    return order;
+  }, [wordReports]);
+  const defaultSeasonLabel = useMemo(
+    () => wordReports.find((r) => r.key === reportDefaultKey)?.seasonLabel ?? reportSeasons[0] ?? "",
+    [wordReports, reportDefaultKey, reportSeasons]
+  );
+  const [reportSeason, setReportSeason] = useState<string>("");
+  useEffect(() => {
+    if (!reportSeasons.includes(reportSeason)) setReportSeason(defaultSeasonLabel);
+  }, [reportSeasons, defaultSeasonLabel, reportSeason]);
+  const activeSeason = reportSeasons.includes(reportSeason) ? reportSeason : defaultSeasonLabel;
+  const seasonReports = useMemo(
+    () => wordReports.filter((r) => (r.seasonLabel ?? "") === activeSeason),
+    [wordReports, activeSeason]
+  );
+  const seasonInitialKey = seasonReports.some((r) => r.key === reportDefaultKey)
+    ? reportDefaultKey
+    : seasonReports[seasonReports.length - 1]?.key;
+
   // 재시험 관련 분류
   const scheduledRetests = db.retests
     .filter((r) => r.status === "scheduled")
@@ -229,12 +255,34 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
         {activeTab === "word" && (
           <>
             {wordReports.length > 0 && (
-              <StudentReport
-                reports={wordReports}
-                initialReportKey={reportDefaultKey}
-                embedded
-                className="rounded-3xl border border-lab-line bg-lab-page px-3 py-4 shadow-lab-sm"
-              />
+              <div className="space-y-3">
+                {reportSeasons.length > 1 && (
+                  <div className="flex gap-1 rounded-full border border-lab-line bg-lab-paper p-1 shadow-lab-sm">
+                    {reportSeasons.map((s) => {
+                      const on = s === activeSeason;
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setReportSeason(s)}
+                          className={`min-w-[84px] flex-1 rounded-full px-4 py-2 text-[13px] font-bold transition ${
+                            on ? "bg-lab-navy text-white shadow-lab-sm" : "text-lab-muted hover:text-lab-navy"
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <StudentReport
+                  key={activeSeason}
+                  reports={seasonReports}
+                  initialReportKey={seasonInitialKey}
+                  embedded
+                  className="rounded-3xl border border-lab-line bg-lab-page px-3 py-4 shadow-lab-sm"
+                />
+              </div>
             )}
 
             {/* 요약 */}

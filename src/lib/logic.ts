@@ -59,20 +59,41 @@ export interface AchievementPeriod {
   passGoal: number;
 }
 
+// 학기별 월 단위 구간. 월 경계는 캘린더가 아니라 관리 화면의 개강일/종강일 기준.
+// (방학·휴강으로 일정이 밀리면 관리에서 각 구간 날짜를 조정)
 export const ACHIEVEMENT_PERIODS: AchievementPeriod[] = [
+  // 봄학기 (3월~6/7)
   {
-    // 봄학기 기록 보기용(여름 성취평가 이전). 3월~6/7 기록을 학생·보호자 화면에서 조회.
-    key: "2026-spring",
-    seasonLabel: "봄학기 기록",
-    label: "봄학기",
+    key: "2026-spring-1",
+    seasonLabel: "봄학기",
+    label: "1개월차",
     startDate: "2026-03-01",
-    endDate: "2026-06-07",
-    targetTests: 30,
-    passGoal: 24,
+    endDate: "2026-03-31",
+    targetTests: 8,
+    passGoal: 6,
   },
   {
+    key: "2026-spring-2",
+    seasonLabel: "봄학기",
+    label: "2개월차",
+    startDate: "2026-04-01",
+    endDate: "2026-04-30",
+    targetTests: 8,
+    passGoal: 6,
+  },
+  {
+    key: "2026-spring-3",
+    seasonLabel: "봄학기",
+    label: "3개월차",
+    startDate: "2026-05-01",
+    endDate: "2026-06-07",
+    targetTests: 8,
+    passGoal: 6,
+  },
+  // 여름학기 성취 평가
+  {
     key: "2026-summer-1",
-    seasonLabel: "여름학기 성취 평가",
+    seasonLabel: "여름학기",
     label: "1개월차",
     startDate: "2026-06-08",
     endDate: "2026-07-03",
@@ -81,7 +102,7 @@ export const ACHIEVEMENT_PERIODS: AchievementPeriod[] = [
   },
   {
     key: "2026-summer-2",
-    seasonLabel: "여름학기 성취 평가",
+    seasonLabel: "여름학기",
     label: "2개월차",
     startDate: "2026-07-06",
     endDate: "2026-08-03",
@@ -90,7 +111,7 @@ export const ACHIEVEMENT_PERIODS: AchievementPeriod[] = [
   },
   {
     key: "2026-summer-3",
-    seasonLabel: "여름학기 성취 평가",
+    seasonLabel: "여름학기",
     label: "3개월차",
     startDate: "2026-08-05",
     endDate: "2026-08-31",
@@ -157,53 +178,38 @@ export function defaultPeriodForView(
   return periods.find((p) => isDateInRange(today, p.startDate, p.endDate)) ?? periods[periods.length - 1];
 }
 
-// ===================== 학기(봄/여름) 구분 — 보호자/학생 조회용 =====================
-export interface Season {
-  key: string;
-  label: string;
-  startDate: string;
-  endDate: string;
+// ===================== 학기(seasonLabel) 그룹핑 — 보호자/학생 조회용 =====================
+export interface SeasonGroup {
+  seasonLabel: string;
+  periods: AchievementPeriod[];
 }
 
-/** 학기 구분(성취평가 구간과 별개, 단순 기간). 봄=3월~6/7, 여름=6/8~8월 */
-export const SEASONS: Season[] = [
-  { key: "spring", label: "봄학기", startDate: "2026-03-01", endDate: "2026-06-07" },
-  { key: "summer", label: "여름학기", startDate: "2026-06-08", endDate: "2026-08-31" },
-];
-
-function rangeHasRecords(records: ScoreRecord[], startDate: string, endDate: string): boolean {
-  return records.some((r) => r.attemptType === "first" && isDateInRange(r.examDate, startDate, endDate));
-}
-
-/** 기록이 있거나 오늘이 속한 학기만 (없으면 첫 학기) */
-export function seasonsWithData(seasons: Season[], records: ScoreRecord[], today: string): Season[] {
-  const list = seasons.filter(
-    (s) => rangeHasRecords(records, s.startDate, s.endDate) || isDateInRange(today, s.startDate, s.endDate)
-  );
-  return list.length ? list : seasons.slice(0, 1);
-}
-
-/** 기본 선택 학기: 기록 있는 가장 최근 → 오늘이 속한 학기 → 마지막 */
-export function defaultSeason(seasons: Season[], records: ScoreRecord[], today: string): Season | null {
-  if (!seasons.length) return null;
-  const withRecords = seasons.filter((s) => rangeHasRecords(records, s.startDate, s.endDate));
-  if (withRecords.length) return [...withRecords].sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
-  return seasons.find((s) => isDateInRange(today, s.startDate, s.endDate)) ?? seasons[seasons.length - 1];
-}
-
-/** 기간 내 기록이 있는 달 목록 (YYYY-MM, "M월") — 학기 안 월 드롭다운용 */
-export function monthsWithData(
-  records: ScoreRecord[],
-  startDate: string,
-  endDate: string
-): { key: string; label: string }[] {
-  const set = new Set<string>();
-  for (const r of records) {
-    if (r.attemptType !== "first") continue;
-    if (!isDateInRange(r.examDate, startDate, endDate)) continue;
-    set.add(r.examDate.slice(0, 7));
+/** 성취 구간을 학기(seasonLabel)별로 묶기. periods 배열 순서를 유지 */
+export function groupBySeason(periods: AchievementPeriod[]): SeasonGroup[] {
+  const order: string[] = [];
+  const map = new Map<string, AchievementPeriod[]>();
+  for (const p of periods) {
+    if (!map.has(p.seasonLabel)) {
+      map.set(p.seasonLabel, []);
+      order.push(p.seasonLabel);
+    }
+    map.get(p.seasonLabel)!.push(p);
   }
-  return [...set].sort().map((ym) => ({ key: ym, label: `${Number(ym.slice(5, 7))}월` }));
+  return order.map((label) => ({ seasonLabel: label, periods: map.get(label)! }));
+}
+
+/** 학기 그룹에 기록이 있거나 오늘이 속한 구간이 하나라도 있는지 */
+export function seasonGroupHasData(group: SeasonGroup, records: ScoreRecord[], today: string): boolean {
+  return group.periods.some(
+    (p) => periodHasRecords(p, records) || isDateInRange(today, p.startDate, p.endDate)
+  );
+}
+
+/** 학기 그룹 전체 범위(첫 개강일~마지막 종강일) */
+export function seasonRange(group: SeasonGroup): { startDate: string; endDate: string } {
+  const starts = group.periods.map((p) => p.startDate).sort();
+  const ends = group.periods.map((p) => p.endDate).sort();
+  return { startDate: starts[0] ?? "", endDate: ends[ends.length - 1] ?? "" };
 }
 
 export function achievementRangeLabel(period: AchievementPeriod): string {
