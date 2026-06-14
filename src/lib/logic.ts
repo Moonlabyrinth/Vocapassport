@@ -61,6 +61,16 @@ export interface AchievementPeriod {
 
 export const ACHIEVEMENT_PERIODS: AchievementPeriod[] = [
   {
+    // 봄학기 기록 보기용(여름 성취평가 이전). 3월~6/7 기록을 학생·보호자 화면에서 조회.
+    key: "2026-spring",
+    seasonLabel: "봄학기 기록",
+    label: "봄학기",
+    startDate: "2026-03-01",
+    endDate: "2026-06-07",
+    targetTests: 30,
+    passGoal: 24,
+  },
+  {
     key: "2026-summer-1",
     seasonLabel: "여름학기 성취 평가",
     label: "1개월차",
@@ -111,6 +121,40 @@ export function isDateInRange(date: string, startDate: string, endDate: string):
 
 export function achievementPeriodForDate(date: string): AchievementPeriod | null {
   return ACHIEVEMENT_PERIODS.find((period) => isDateInRange(date, period.startDate, period.endDate)) ?? null;
+}
+
+/** 어떤 구간에든 정규(first) 기록이 있는지 */
+function periodHasRecords(period: AchievementPeriod, records: ScoreRecord[]): boolean {
+  return records.some((r) => r.attemptType === "first" && isDateInRange(r.examDate, period.startDate, period.endDate));
+}
+
+/** 기록이 있는 구간만(없으면 오늘이 속한 구간 포함) — 학생/보호자 화면 구간 목록용 */
+export function periodsWithData(
+  periods: AchievementPeriod[],
+  records: ScoreRecord[],
+  today: string
+): AchievementPeriod[] {
+  const list = periods.filter(
+    (p) => periodHasRecords(p, records) || isDateInRange(today, p.startDate, p.endDate)
+  );
+  return list.length ? list : periods.slice(0, 1);
+}
+
+/**
+ * 화면 기본 선택 구간: 기록이 있으면 그 중 가장 최근, 없으면 오늘이 속한 구간, 없으면 마지막.
+ * (예: 여름 기록이 있으면 여름, 봄 기록만 있으면 봄으로 자동 선택)
+ */
+export function defaultPeriodForView(
+  periods: AchievementPeriod[],
+  records: ScoreRecord[],
+  today: string
+): AchievementPeriod | null {
+  if (!periods.length) return null;
+  const withRecords = periods.filter((p) => periodHasRecords(p, records));
+  if (withRecords.length) {
+    return [...withRecords].sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
+  }
+  return periods.find((p) => isDateInRange(today, p.startDate, p.endDate)) ?? periods[periods.length - 1];
 }
 
 export function achievementRangeLabel(period: AchievementPeriod): string {

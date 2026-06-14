@@ -27,7 +27,13 @@ import {
 } from "recharts";
 
 const SPRING_END_DATE = "2026-06-05";
-const DEFAULT_ACHIEVEMENT_PERIOD = ACHIEVEMENT_PERIODS[0];
+const TODAY_KEY = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+})();
+// 통계 기본 구간: 오늘이 속한 구간(없으면 첫 구간). 봄학기 구간 추가로 [0]이 봄학기가 되어도 교사는 현재 구간을 기본 선택.
+const DEFAULT_ACHIEVEMENT_PERIOD =
+  ACHIEVEMENT_PERIODS.find((p) => isDateInRange(TODAY_KEY, p.startDate, p.endDate)) ?? ACHIEVEMENT_PERIODS[0];
 
 type StatsPeriod = "achievement" | "spring" | "all" | "custom";
 

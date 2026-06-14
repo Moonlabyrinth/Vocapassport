@@ -17,6 +17,7 @@ import {
   monthlyMaxTotal,
   monthlyPercent,
   resolveAchievementPeriods,
+  defaultPeriodForView,
   type AchievementPeriod,
 } from "@/lib/logic";
 import { formatDateTime, relativeFromNow } from "@/lib/datetime";
@@ -148,6 +149,12 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
       });
   }, [achievementPeriods, me?.name, records]);
 
+  // 리포트 기본 탭: 기록이 있는 가장 최근 구간(없으면 현재 구간)
+  const reportDefaultKey = useMemo(() => {
+    const firstRecs = records.filter((r) => r.status === "approved" && r.attemptType === "first");
+    return defaultPeriodForView(achievementPeriods, firstRecs, localDateKey())?.key;
+  }, [records, achievementPeriods]);
+
   // 재시험 관련 분류
   const scheduledRetests = db.retests
     .filter((r) => r.status === "scheduled")
@@ -224,6 +231,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
             {wordReports.length > 0 && (
               <StudentReport
                 reports={wordReports}
+                initialReportKey={reportDefaultKey}
                 embedded
                 className="rounded-3xl border border-lab-line bg-lab-page px-3 py-4 shadow-lab-sm"
               />
