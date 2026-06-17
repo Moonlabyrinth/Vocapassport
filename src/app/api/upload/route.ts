@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
-import { genId, savePhoto } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { genId, getDB, savePhoto } from "@/lib/db";
+import { findSessionStaff, getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +16,14 @@ export async function POST(req: NextRequest) {
     if (!(file instanceof File)) {
       return NextResponse.json({ ok: false, error: "파일이 없습니다." }, { status: 400 });
     }
+    const sess = getSession(req);
+    const db = sess?.role === "teacher" ? await getDB() : null;
+    const staff = db && sess ? findSessionStaff(db, sess) : null;
+    if (!staff || staff.role === "viewer") {
+      return NextResponse.json({ ok: false, error: "권한이 없습니다." }, { status: 403 });
+    }
 
     if (kind === "file") {
-      const sess = getSession(req);
-      if (!sess || sess.role !== "teacher") {
-        return NextResponse.json({ ok: false, error: "권한이 없습니다." }, { status: 403 });
-      }
       if (file.size > 20 * 1024 * 1024) {
         return NextResponse.json({ ok: false, error: "첨부파일은 20MB 이하여야 합니다." }, { status: 400 });
       }

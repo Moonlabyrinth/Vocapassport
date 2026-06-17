@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AppStateHook, apiLogout, apiChangePassword } from "@/lib/client";
 import ScoreEntry from "@/components/ScoreEntry";
 import RetestTab from "@/components/RetestTab";
@@ -25,6 +25,10 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
   const [showPw, setShowPw] = useState(false);
   const scheduledCount = app.db.retests.filter((r) => r.status === "scheduled").length;
 
+  useEffect(() => {
+    if (app.user?.mustChangePassword) setShowPw(true);
+  }, [app.user?.mustChangePassword]);
+
   return (
     <div className="min-h-screen pb-24 sm:pb-8">
       <header className="bg-lab-paper border-b border-lab-line sticky top-0 z-30">
@@ -33,7 +37,9 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
             <span className="text-2xl">📚</span>
             <div>
               <h1 className="font-serif font-bold text-lab-navy leading-tight">통합 시험 관리</h1>
-              <p className="text-xs text-lab-muted">선생님 화면</p>
+              <p className="text-xs text-lab-muted">
+                {app.user?.name ?? "관리자"}{app.user?.staffRoleLabel ? ` · ${app.user.staffRoleLabel}` : ""}
+              </p>
             </div>
           </div>
           <nav className="hidden sm:flex gap-1 items-center">
@@ -54,7 +60,7 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
               </button>
             ))}
             <span className="w-px h-6 bg-lab-line mx-1" />
-            <Button size="sm" variant="ghost" onClick={() => setShowPw(true)}>비밀번호</Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowPw(true)}>내 비밀번호</Button>
             <Button size="sm" variant="ghost" onClick={async () => { await apiLogout(); app.reload(); }}>로그아웃</Button>
           </nav>
           <div className="sm:hidden">
@@ -98,14 +104,14 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
         </div>
       </nav>
 
-      <Modal open={showPw} onClose={() => setShowPw(false)} title="선생님 비밀번호 변경">
-        <TeacherChangePassword onDone={() => setShowPw(false)} />
+      <Modal open={showPw} onClose={() => setShowPw(false)} title="내 관리자 비밀번호 변경">
+        <TeacherChangePassword onDone={async () => { setShowPw(false); await app.reload(); }} />
       </Modal>
     </div>
   );
 }
 
-function TeacherChangePassword({ onDone }: { onDone: () => void }) {
+function TeacherChangePassword({ onDone }: { onDone: () => void | Promise<void> }) {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [next2, setNext2] = useState("");
@@ -121,7 +127,7 @@ function TeacherChangePassword({ onDone }: { onDone: () => void }) {
     setBusy(false);
     if (!r.ok) return setError(r.error || "변경 실패");
     alert("비밀번호가 변경되었습니다.");
-    onDone();
+    await onDone();
   }
 
   return (

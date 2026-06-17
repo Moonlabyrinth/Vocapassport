@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AppStateHook, apiAdmin, uploadPhoto, uploadFile } from "@/lib/client";
 import { Button, Card, Field, Input, Select, Badge, EmptyState, Modal, DisclosureButton, TextInput, TextArea } from "./ui";
 import DatePicker from "./DatePicker";
-import { ScheduleType, PassKindChoice, ScoreRecord, NoticeAudience, Notice, NoticeAttachment, Database } from "@/lib/types";
+import { ScheduleType, PassKindChoice, ScoreRecord, NoticeAudience, Notice, NoticeAttachment, Database, StaffRole } from "@/lib/types";
 import { todayStr } from "@/lib/datetime";
 import {
   ACHIEVEMENT_PERIODS,
@@ -21,14 +21,25 @@ import { NeedsRetestRow, RetestHistoryRow } from "./RetestTab";
 interface IssuedCred { name: string; loginId: string; password: string }
 const RECORD_PAGE_SIZE = 30;
 
-type ManageSection = "student" | "exam" | "homework" | "notice";
+type ManageSection = "student" | "exam" | "homework" | "notice" | "admin";
 
 const MANAGE_SECTIONS: { id: ManageSection; label: string }[] = [
   { id: "student", label: "학생관리" },
   { id: "exam", label: "시험관리" },
   { id: "homework", label: "숙제" },
   { id: "notice", label: "공지사항" },
+  { id: "admin", label: "관리자" },
 ];
+
+const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  master: "마스터 관리자",
+  director: "원장님",
+  viceDirector: "부원장님",
+  teacher: "선생님",
+  viewer: "조회 전용",
+};
+
+const STAFF_ROLE_OPTIONS: StaffRole[] = ["master", "director", "viceDirector", "teacher", "viewer"];
 
 /** 반 선택 버튼 그리드 — 학생관리/시험관리 공용 */
 function ClassPicker({
@@ -94,7 +105,7 @@ export default function ManageTab({ app }: { app: AppStateHook }) {
   return (
     <div className="space-y-4">
       {/* 관리 하위 탭 */}
-      <div className="grid grid-cols-2 gap-1 rounded-xl border border-lab-line bg-[#e9e3d6] p-1 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-lab-line bg-[#e9e3d6] p-1 sm:grid-cols-5">
         {MANAGE_SECTIONS.map((s) => (
           <button
             key={s.id}
@@ -111,6 +122,7 @@ export default function ManageTab({ app }: { app: AppStateHook }) {
 
       {section === "homework" && <HomeworkSection app={app} />}
       {section === "notice" && <NoticeManager app={app} />}
+      {section === "admin" && <StaffAdminSection app={app} />}
 
       {section === "student" && (
         <>
@@ -194,6 +206,169 @@ function HomeworkSection({ app }: { app: AppStateHook }) {
       </Card>
       {cls && <HomeworkManager key={cls.id} app={app} classId={cls.id} />}
     </div>
+  );
+}
+
+function StaffAdminSection({ app }: { app: AppStateHook }) {
+  const { db, user } = app;
+  const isMaster = user?.staffRole === "master";
+  const [loginId, setLoginId] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<StaffRole>("teacher");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function createStaff() {
+    if (!isMaster) return alert("마스터 관리자만 직원 계정을 관리할 수 있습니다.");
+    if (!loginId.trim() || !name.trim() || !password) return alert("아이디, 이름, 임시 비밀번호를 모두 입력하세요.");
+    setBusy(true);
+    const r = await apiAdmin({ op: "createStaff", loginId, name, role, password, mustChangePassword: true });
+    setBusy(false);
+    if (!r.ok) return alert(r.error || "직원 계정 생성 실패");
+    setLoginId("");
+    setName("");
+    setPassword("");
+    setRole("teacher");
+    await app.reload();
+  }
+
+  async function updateStaff(staffId: string, patch: Partial<{ loginId: string; name: string; role: StaffRole; active: boolean }>) {
+    const r = await apiAdmin({ op: "updateStaff", staffId, patch });
+    if (!r.ok) return alert(r.error || "직원 계정 수정 실패");
+    await app.reload();
+  }
+
+  async function resetPassword(staffId: string, staffName: string) {
+    const next = window.prompt(`${staffName}님의 새 임시 비밀번호를 입력하세요.`, "");
+    if (next == null) return;
+    if (next.length < 4) return alert("비밀번호는 4자 이상이어야 합니다.");
+    const r = await apiAdmin({ op: "resetStaffPassword", staffId, password: next, mustChangePassword: true });
+    if (!r.ok) return alert(r.error || "비밀번호 초기화 실패");
+    alert("비밀번호를 초기화했습니다. 해당 직원에게 새 임시 비밀번호를 전달해 주세요.");
+    await app.reload();
+  }
+
+  if (!isMaster) {
+    return (
+      <div className="space-y-4">
+        <Card title="관리자 계정 관리">
+          <EmptyState>관리자 계정 관리는 마스터 관리자만 사용할 수 있습니다.</EmptyState>
+        </Card>
+        <AuditLogList db={db} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card title="관리자 계정 만들기" right={<Badge color="amber">마스터 전용</Badge>}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+          <Field label="아이디">
+            <Input value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="예: director" />
+          </Field>
+          <Field label="이름">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 원장님" />
+          </Field>
+          <Field label="권한">
+            <Select value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
+              {STAFF_ROLE_OPTIONS.map((item) => (
+                <option key={item} value={item}>{STAFF_ROLE_LABELS[item]}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="임시 비밀번호">
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="4자 이상" />
+          </Field>
+          <div className="flex items-end">
+            <Button onClick={createStaff} disabled={busy} className="w-full">{busy ? "생성 중…" : "계정 생성"}</Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="관리자 계정 목록" right={<Badge color={db.staffUsers.length ? "indigo" : "gray"}>{db.staffUsers.length}명</Badge>}>
+        {db.staffUsers.length === 0 ? (
+          <EmptyState>등록된 관리자 계정이 없습니다.</EmptyState>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full whitespace-nowrap text-sm">
+              <thead>
+                <tr className="border-b border-lab-line text-left text-lab-muted">
+                  <th className="py-2 pr-3 font-medium">이름</th>
+                  <th className="py-2 pr-3 font-medium">아이디</th>
+                  <th className="py-2 pr-3 font-medium">권한</th>
+                  <th className="py-2 pr-3 font-medium">상태</th>
+                  <th className="py-2 pr-3 font-medium">최근 로그인</th>
+                  <th className="py-2 text-right font-medium">관리</th>
+                </tr>
+              </thead>
+              <tbody>
+                {db.staffUsers.map((staff) => (
+                  <tr key={staff.id} className="border-b border-lab-line/70">
+                    <td className="py-2 pr-3 font-semibold text-lab-ink">{staff.name}</td>
+                    <td className="py-2 pr-3 font-mono text-lab-muted">{staff.loginId}</td>
+                    <td className="py-2 pr-3">
+                      <Select
+                        value={staff.role}
+                        onChange={(e) => updateStaff(staff.id, { role: e.target.value as StaffRole })}
+                        disabled={staff.id === user?.id && staff.role === "master"}
+                      >
+                        {STAFF_ROLE_OPTIONS.map((item) => (
+                          <option key={item} value={item}>{STAFF_ROLE_LABELS[item]}</option>
+                        ))}
+                      </Select>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Badge color={staff.active ? "green" : "gray"}>{staff.active ? "활성" : "비활성"}</Badge>
+                    </td>
+                    <td className="py-2 pr-3 text-lab-muted">{staff.lastLoginAt ? staff.lastLoginAt.slice(0, 10) : "-"}</td>
+                    <td className="py-2">
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="soft" onClick={() => resetPassword(staff.id, staff.name)}>비번 초기화</Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => updateStaff(staff.id, { active: !staff.active })}
+                          disabled={staff.id === user?.id}
+                        >
+                          {staff.active ? "비활성화" : "활성화"}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <AuditLogList db={db} />
+    </div>
+  );
+}
+
+function AuditLogList({ db }: { db: Database }) {
+  const logs = db.auditLogs ?? [];
+  return (
+    <Card title="감사 로그" right={<Badge color={logs.length ? "indigo" : "gray"}>{logs.length}건</Badge>}>
+      {logs.length === 0 ? (
+        <EmptyState>표시할 감사 로그가 없습니다.</EmptyState>
+      ) : (
+        <ul className="divide-y divide-lab-line">
+          {logs.slice(0, 80).map((log) => (
+            <li key={log.id} className="py-2.5 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-semibold text-lab-ink">{log.summary}</div>
+                <div className="text-xs text-lab-muted">{log.createdAt.slice(0, 16).replace("T", " ")}</div>
+              </div>
+              <div className="mt-0.5 text-xs text-lab-muted">
+                {log.actorName} · {STAFF_ROLE_LABELS[log.actorRole as StaffRole] ?? log.actorRole} · {log.actionType}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

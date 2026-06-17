@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Database, emptyDatabase } from "./types";
+import { Database, StaffRole, emptyDatabase } from "./types";
 import { Action, ActionResult } from "./actions";
 
 // guardian(보호자)은 STEP 1에서 로그인 UI 탭으로만 사용. 서버 인증은 STEP 2.
@@ -11,6 +11,8 @@ export interface CurrentUser {
   id: string;
   name: string;
   role: Role;
+  staffRole?: StaffRole;
+  staffRoleLabel?: string;
   loginId?: string;
   mustChangePassword?: boolean;
 }
@@ -26,7 +28,8 @@ interface StateResponse {
 export async function apiLogin(
   role: Role,
   password: string,
-  loginId?: string
+  loginId?: string,
+  legacyPassword?: string
 ): Promise<{ ok: boolean; error?: string; setup?: boolean; user?: CurrentUser }> {
   // 네트워크 지연/무응답에도 버튼이 "확인 중…"으로 멈추지 않도록 타임아웃을 둔다.
   const ctrl = new AbortController();
@@ -35,7 +38,7 @@ export async function apiLogin(
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, password, loginId }),
+      body: JSON.stringify({ role, password, loginId, legacyPassword }),
       signal: ctrl.signal,
     });
     // 서버 오류(500 등)로 JSON이 아닌 응답이 와도 throw 하지 않고 오류 메시지로 변환.

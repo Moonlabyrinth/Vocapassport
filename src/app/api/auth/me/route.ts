@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDB } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { findSessionStaff, getSession, staffRoleLabel } from "@/lib/auth";
 import { isActiveStudent } from "@/lib/logic";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +8,26 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const sess = getSession(req);
   const db = await getDB();
-  const teacherSetupNeeded = !db.settings.teacherPasswordHash;
+  const teacherSetupNeeded = (db.staffUsers ?? []).length === 0;
   if (!sess) {
     return NextResponse.json({ ok: true, user: null, teacherSetupNeeded });
+  }
+  if (sess.role === "teacher") {
+    const staff = findSessionStaff(db, sess);
+    return NextResponse.json({
+      ok: true,
+      user: staff
+        ? {
+            id: staff.id,
+            name: staff.name,
+            role: "teacher",
+            staffRole: staff.role,
+            staffRoleLabel: staffRoleLabel(staff.role),
+            mustChangePassword: staff.mustChangePassword,
+          }
+        : null,
+      teacherSetupNeeded,
+    });
   }
   if (sess.role === "student") {
     const me = db.students.find((s) => s.id === sess.id);
@@ -30,9 +47,5 @@ export async function GET(req: NextRequest) {
       teacherSetupNeeded,
     });
   }
-  return NextResponse.json({
-    ok: true,
-    user: { id: "teacher", name: "선생님", role: "teacher" },
-    teacherSetupNeeded,
-  });
+  return NextResponse.json({ ok: true, user: null, teacherSetupNeeded });
 }

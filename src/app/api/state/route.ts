@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDB } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { findSessionStaff, getSession, staffRoleLabel } from "@/lib/auth";
 import { isActiveStudent } from "@/lib/logic";
 import { teacherView, studentView, guardianView } from "@/lib/scope";
 
@@ -13,11 +13,22 @@ export async function GET(req: NextRequest) {
   }
   const db = await getDB();
   if (sess.role === "teacher") {
+    const staff = findSessionStaff(db, sess);
+    if (!staff) {
+      return NextResponse.json({ ok: false, error: "관리자 계정이 변경되었습니다. 다시 로그인해 주세요." }, { status: 401 });
+    }
     return NextResponse.json({
       ok: true,
       role: "teacher",
-      user: { id: "teacher", name: "선생님", role: "teacher" },
-      db: teacherView(db),
+      user: {
+        id: staff.id,
+        name: staff.name,
+        role: "teacher",
+        staffRole: staff.role,
+        staffRoleLabel: staffRoleLabel(staff.role),
+        mustChangePassword: staff.mustChangePassword,
+      },
+      db: teacherView(db, staff.role),
     });
   }
   // 학생/보호자: 연결된 학생(자녀) 데이터만

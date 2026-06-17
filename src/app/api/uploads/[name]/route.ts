@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { getPhoto } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ name: string }> }
 ) {
+  const sess = getSession(req);
+  if (!sess) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { name } = await params;
   const safe = path.basename(name); // 경로 탈출 방지
   const photo = await getPhoto(safe);

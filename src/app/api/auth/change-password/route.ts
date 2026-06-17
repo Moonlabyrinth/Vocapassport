@@ -3,6 +3,7 @@ import { mutate } from "@/lib/db";
 import {
   getSession,
   hashPassword,
+  findSessionStaff,
   verifyPassword,
   validateNewPassword,
 } from "@/lib/auth";
@@ -33,15 +34,26 @@ export async function POST(req: NextRequest) {
 
   const result = await mutate((db) => {
     if (sess.role === "teacher") {
-      const ok = verifyPassword(
-        cur,
-        db.settings.teacherPasswordSalt || "",
-        db.settings.teacherPasswordHash || ""
-      );
+      const staff = findSessionStaff(db, sess);
+      if (!staff) return { ok: false, error: "관리자 계정을 찾을 수 없습니다. 다시 로그인해 주세요." };
+      const ok = verifyPassword(cur, staff.passwordSalt, staff.passwordHash);
       if (!ok) return { ok: false, error: "현재 비밀번호가 올바르지 않습니다." };
       const { hash, salt } = hashPassword(next);
-      db.settings.teacherPasswordHash = hash;
-      db.settings.teacherPasswordSalt = salt;
+      staff.passwordHash = hash;
+      staff.passwordSalt = salt;
+      staff.mustChangePassword = false;
+      staff.updatedAt = new Date().toISOString();
+      db.auditLogs ??= [];
+      db.auditLogs.push({
+        id: `audit_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+        actorId: staff.id,
+        actorName: staff.name,
+        actorRole: staff.role,
+        actionType: "changeStaffPassword",
+        summary: "본인 관리자 비밀번호 변경",
+        targetId: staff.id,
+        createdAt: staff.updatedAt,
+      });
       return { ok: true };
     }
     const me = db.students.find((s) => s.id === sess.id);

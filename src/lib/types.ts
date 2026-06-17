@@ -41,6 +41,36 @@ export interface Student {
 /** 클라이언트로 보낼 때 비밀번호 필드를 제거한 학생 */
 export type SafeStudent = Omit<Student, "passwordHash" | "passwordSalt">;
 
+// ===================== 직원 / 관리자 계정 =====================
+export type StaffRole = "master" | "director" | "viceDirector" | "teacher" | "viewer";
+
+export interface StaffUser {
+  id: string;
+  loginId: string;
+  name: string;
+  role: StaffRole;
+  passwordHash: string;
+  passwordSalt: string;
+  active: boolean;
+  mustChangePassword: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string | null;
+}
+
+export type SafeStaffUser = Omit<StaffUser, "passwordHash" | "passwordSalt">;
+
+export interface AuditLog {
+  id: string;
+  actorId: string;
+  actorName: string;
+  actorRole: StaffRole | "student" | "guardian" | "legacyTeacher";
+  actionType: string;
+  summary: string;
+  targetId?: string | null;
+  createdAt: string;
+}
+
 /** 책(단어장) — 점수 입력 시 만점/컷 기본값 제공 */
 export interface Book {
   id: string;
@@ -235,6 +265,7 @@ export interface Settings {
 export interface Database {
   classes: ClassRoom[];
   students: Student[];
+  staffUsers: StaffUser[];
   books: Book[];
   records: ScoreRecord[];
   retests: RetestSchedule[];
@@ -242,12 +273,14 @@ export interface Database {
   monthlyResults: MonthlyResult[];
   homeworks: Homework[];
   notices: Notice[];
+  auditLogs: AuditLog[];
   settings: Settings;
 }
 
 export const emptyDatabase = (): Database => ({
   classes: [],
   students: [],
+  staffUsers: [],
   books: [],
   records: [],
   retests: [],
@@ -255,5 +288,6 @@ export const emptyDatabase = (): Database => ({
   monthlyResults: [],
   homeworks: [],
   notices: [],
+  auditLogs: [],
   settings: {},
 });

@@ -1,7 +1,8 @@
 // 역할별 데이터 스코핑 + 민감정보 제거 (순수 함수)
 
-import { Database, Student, SafeStudent, Settings, MonthlyTest } from "./types";
+import { Database, Student, SafeStudent, Settings, MonthlyTest, StaffRole } from "./types";
 import { monthlyTotal, monthlyPercent } from "./logic";
+import { sanitizeStaffUser } from "./auth";
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -61,10 +62,14 @@ function publicSettings(settings: Settings | undefined): Settings {
 }
 
 /** 선생님용: 전체 데이터 (비밀번호 필드만 제거) */
-export function teacherView(db: Database): Database {
+export function teacherView(db: Database, staffRole: StaffRole | undefined = "viewer"): Database {
+  const canViewStaff = staffRole === "master";
+  const canViewAudit = staffRole === "master" || staffRole === "director";
   return {
     ...db,
     students: db.students.map(sanitizeStudent) as unknown as Student[],
+    staffUsers: canViewStaff ? (db.staffUsers ?? []).map(sanitizeStaffUser) as unknown as Database["staffUsers"] : [],
+    auditLogs: canViewAudit ? [...(db.auditLogs ?? [])].slice(-300).reverse() : [],
     settings: publicSettings(db.settings), // 선생님 비번 해시 등은 내보내지 않음
   };
 }
@@ -80,6 +85,7 @@ export function studentView(
     return {
       classes: [],
       students: [],
+      staffUsers: [],
       books: [],
       records: [],
       retests: [],
@@ -87,6 +93,7 @@ export function studentView(
       monthlyResults: [],
       homeworks: [],
       notices: [],
+      auditLogs: [],
       settings: publicSettings(db.settings),
     };
   }
@@ -100,6 +107,7 @@ export function studentView(
   return {
     classes: myClass ? [myClass] : [],
     students: [selfStudent(me) as unknown as Student],
+    staffUsers: [],
     books: db.books.filter((b) => b.classId === me.classId),
     records: db.records.filter((r) => r.studentId === studentId),
     retests: db.retests.filter((r) => r.studentId === studentId),
@@ -107,6 +115,7 @@ export function studentView(
     monthlyResults: myMonthlyResults,
     homeworks: db.homeworks.filter((h) => h.classId === me.classId),
     notices: visibleNoticesFor(db, viewerRole),
+    auditLogs: [],
     settings: publicSettings(db.settings),
   };
 }

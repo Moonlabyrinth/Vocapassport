@@ -44,12 +44,13 @@ interface LeaderboardResponse {
 const ROLE_TABS: { id: Role; main: string; sub: string }[] = [
   { id: "student", main: "학생", sub: "Student" },
   { id: "guardian", main: "보호자", sub: "Parent" },
-  { id: "teacher", main: "선생님", sub: "Teacher" },
+  { id: "teacher", main: "관리자", sub: "Staff" },
 ];
 
 export default function Login({ onSuccess }: { onSuccess: () => void }) {
   const [role, setRole] = useState<Role>("student");
   const [loginId, setLoginId] = useState("");
+  const [legacyPassword, setLegacyPassword] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [teacherSetupNeeded, setTeacherSetupNeeded] = useState(false);
@@ -74,17 +75,18 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
   }, []);
 
   const teacherSetup = role === "teacher" && teacherSetupNeeded;
-  const showIdField = role === "student" || role === "guardian";
+  const showIdField = role === "student" || role === "guardian" || role === "teacher";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (role === "guardian" && !loginId.trim()) return setError("자녀 이름을 입력하세요.");
     if (role === "student" && !loginId.trim()) return setError("아이디를 입력하세요.");
+    if (role === "teacher" && !loginId.trim()) return setError(teacherSetup ? "마스터 아이디를 입력하세요." : "직원 아이디를 입력하세요.");
     if (!password) return setError(role === "guardian" ? "인증코드를 입력하세요." : "비밀번호를 입력하세요.");
     setBusy(true);
     try {
-      const r = await apiLogin(role, password, loginId);
+      const r = await apiLogin(role, password, loginId, teacherSetup ? legacyPassword : undefined);
       if (!r.ok) {
         setError(r.error || "로그인 실패");
         return;
@@ -102,6 +104,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
     setRole(next);
     setError(null);
     setShowPw(false);
+    setLegacyPassword("");
   }
 
   return (
@@ -151,7 +154,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
                 {showIdField && (
                   <div className="mb-3.5">
                     <label htmlFor="login-id" className="mb-1.5 block text-[12px] font-bold text-lab-navy">
-                      {role === "guardian" ? "자녀 이름" : "아이디 (이름)"}
+                      {role === "guardian" ? "자녀 이름" : role === "teacher" ? (teacherSetup ? "마스터 아이디" : "직원 아이디") : "아이디 (이름)"}
                     </label>
                     <div className="relative">
                       <User aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-[#b6b1a3]" />
@@ -161,8 +164,37 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
                         className="pl-[42px]"
                         value={loginId}
                         onChange={(e) => setLoginId(e.target.value)}
-                        placeholder={role === "guardian" ? "자녀 이름을 입력하세요" : "이름을 입력하세요"}
+                        placeholder={
+                          role === "guardian"
+                            ? "자녀 이름을 입력하세요"
+                            : role === "teacher"
+                            ? teacherSetup
+                              ? "예: master"
+                              : "직원 아이디를 입력하세요"
+                            : "이름을 입력하세요"
+                        }
                         autoComplete="username"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {teacherSetup && (
+                  <div className="mb-3.5">
+                    <label htmlFor="legacy-pw" className="mb-1.5 block text-[12px] font-bold text-lab-navy">
+                      기존 공용 관리자 비밀번호
+                    </label>
+                    <div className="relative">
+                      <ShieldCheck aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-[#b6b1a3]" />
+                      <Input
+                        id="legacy-pw"
+                        variant="lab"
+                        className="pl-[42px]"
+                        type={showPw ? "text" : "password"}
+                        value={legacyPassword}
+                        onChange={(e) => setLegacyPassword(e.target.value)}
+                        placeholder="현재 공용 비밀번호"
+                        autoComplete="current-password"
                       />
                     </div>
                   </div>
@@ -170,7 +202,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
 
                 <div className="mb-3.5">
                   <label htmlFor="login-pw" className="mb-1.5 block text-[12px] font-bold text-lab-navy">
-                    {role === "guardian" ? "인증코드" : teacherSetup ? "비밀번호 설정 (최초 1회)" : "비밀번호"}
+                    {role === "guardian" ? "인증코드" : teacherSetup ? "새 마스터 비밀번호" : "비밀번호"}
                   </label>
                   <div className="relative">
                     <Lock aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-[#b6b1a3]" />
@@ -181,7 +213,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
                       type={showPw ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder={role === "guardian" ? "인증코드" : teacherSetup ? "새 비밀번호" : "비밀번호"}
+                      placeholder={role === "guardian" ? "인증코드" : teacherSetup ? "새 마스터 비밀번호" : "비밀번호"}
                       autoComplete={teacherSetup ? "new-password" : "current-password"}
                     />
                     <button
@@ -196,7 +228,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
                   </div>
                   {teacherSetup && (
                     <span className="mt-1 block text-[11px] text-lab-muted">
-                      선생님 비밀번호를 새로 정합니다. 4자 이상.
+                      기존 공용 비밀번호를 확인한 뒤, 새 마스터 비밀번호로 관리자 계정을 만듭니다.
                     </span>
                   )}
                 </div>
@@ -208,7 +240,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
                 )}
 
                 <Button type="submit" variant="navy" disabled={busy} className="w-full">
-                  {busy ? "확인 중…" : teacherSetup ? "비밀번호 설정하고 시작" : "로그인"}
+                  {busy ? "확인 중…" : teacherSetup ? "마스터 계정 만들고 시작" : "로그인"}
                   {!busy && <ArrowRight aria-hidden="true" className="h-4 w-4 text-lab-gold" />}
                 </Button>
               </form>
@@ -224,7 +256,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
 
               {role === "teacher" && teacherSetupNeeded && (
                 <p className="mt-3 text-center text-[11.5px] text-amber-600">
-                  선생님 계정이 아직 없습니다. 입력한 비밀번호로 처음 설정됩니다.
+                  관리자 계정이 아직 없습니다. 최초 1회만 마스터 계정을 만듭니다.
                 </p>
               )}
             </div>

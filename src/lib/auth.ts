@@ -5,16 +5,16 @@ import { promises as fs } from "fs";
 import fssync from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { Database } from "./types";
+import { Database, StaffRole, StaffUser } from "./types";
 import { Action } from "./actions";
 
-// guardian(보호자)은 STEP 1에서 로그인 UI 탭으로만 노출. 서버 인증·세션은 STEP 2에서 추가.
 export type Role = "teacher" | "student" | "guardian";
 
 export interface Session {
   role: Role;
-  id: string; // teacher: "teacher", student: 학생 id
+  id: string; // teacher: 직원 id, student/guardian: 학생 id
   name: string;
+  staffRole?: StaffRole;
   exp: number; // 만료 (ms epoch)
 }
 
@@ -126,6 +126,102 @@ export function validateNewPassword(pw: string): string | null {
   return null;
 }
 
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  master: "마스터 관리자",
+  director: "원장님",
+  viceDirector: "부원장님",
+  teacher: "선생님",
+  viewer: "조회 전용",
+};
+
+export function staffRoleLabel(role: StaffRole | undefined): string {
+  return role ? STAFF_ROLE_LABELS[role] : "관리자";
+}
+
+export function sanitizeStaffUser(staff: StaffUser) {
+  const { passwordHash, passwordSalt, ...rest } = staff;
+  void passwordHash;
+  void passwordSalt;
+  return rest;
+}
+
+export function findSessionStaff(db: Database, sess: Session | null): StaffUser | null {
+  if (!sess || sess.role !== "teacher") return null;
+  return (db.staffUsers ?? []).find((staff) => staff.id === sess.id && staff.active) ?? null;
+}
+
+function staffCanWrite(role: StaffRole | undefined): boolean {
+  return role === "master" || role === "director" || role === "viceDirector" || role === "teacher";
+}
+
+function staffCanManageRecords(role: StaffRole | undefined): boolean {
+  return role === "master" || role === "director" || role === "viceDirector" || role === "teacher";
+}
+
+function staffCanDeleteRecords(role: StaffRole | undefined): boolean {
+  return role === "master" || role === "director" || role === "viceDirector";
+}
+
+function staffCanManageStructure(role: StaffRole | undefined): boolean {
+  return role === "master" || role === "director" || role === "viceDirector";
+}
+
+function staffCanManageSystem(role: StaffRole | undefined): boolean {
+  return role === "master" || role === "director";
+}
+
+function authorizeStaffAction(role: StaffRole | undefined, action: Action): string | null {
+  if (!role) return "관리자 권한을 확인할 수 없습니다. 다시 로그인해 주세요.";
+  if (role === "master") return null;
+  if (role === "viewer") return "조회 전용 계정은 수정할 수 없습니다.";
+
+  switch (action.type) {
+    case "createClass":
+    case "updateClass":
+    case "deleteClass":
+    case "createStudent":
+    case "updateStudent":
+    case "deleteStudent":
+    case "createBook":
+    case "updateBook":
+    case "deleteBook":
+    case "createMonthlyTest":
+    case "updateMonthlyTest":
+    case "deleteMonthlyTest":
+      return staffCanManageStructure(role) ? null : "학생/반/시험 구조 관리는 부원장 이상만 가능합니다.";
+
+    case "deleteRecord":
+    case "deleteRecords":
+      return staffCanDeleteRecords(role) ? null : "성적 삭제는 부원장 이상만 가능합니다.";
+
+    case "updateAchievementPeriods":
+      return staffCanManageSystem(role) ? null : "성취 평가 기간 설정은 원장 이상만 가능합니다.";
+
+    case "createRecord":
+    case "updateRecord":
+    case "updateRecords":
+    case "setRecordPassStatus":
+    case "setRecordsPassStatus":
+    case "setRetestPassStatus":
+    case "setRecordPassKind":
+    case "setRecordsPassKind":
+    case "scheduleRetest":
+    case "rescheduleRetest":
+    case "cancelRetest":
+    case "completeRetest":
+    case "setMonthlyResults":
+    case "createHomework":
+    case "updateHomework":
+    case "deleteHomework":
+    case "createNotice":
+    case "updateNotice":
+    case "deleteNotice":
+      return staffCanWrite(role) && staffCanManageRecords(role) ? null : "수정 권한이 없습니다.";
+    default:
+      return "권한이 없습니다.";
+  }
+}
+
 // secret 디렉터리 보장 (data 폴더)
 export async function ensureDataDir() {
   await fs.mkdir(path.dirname(SECRET_FILE), { recursive: true });
@@ -133,7 +229,7 @@ export async function ensureDataDir() {
 
 /**
  * /api/command 액션 권한 검사. 허용이면 null, 거부면 오류 메시지.
- * - 선생님: 모든 액션 허용
+ * - 직원: 역할별 권한 적용
  * - 학생: 본인 재시험 '예약/취소'만 허용 (점수 입력·관리 등 불가)
  */
 export function authorizeAction(
@@ -142,7 +238,10 @@ export function authorizeAction(
   action: Action
 ): string | null {
   if (!sess) return "로그인이 필요합니다.";
-  if (sess.role === "teacher") return null;
+  if (sess.role === "teacher") {
+    const staff = findSessionStaff(db, sess);
+    return authorizeStaffAction(staff?.role ?? sess.staffRole, action);
+  }
   // 보호자: 조회 전용 — 모든 명령 거부
   if (sess.role === "guardian") return "보호자 계정은 조회만 가능합니다.";
 
