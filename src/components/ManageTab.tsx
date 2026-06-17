@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { AppStateHook, apiAdmin } from "@/lib/client";
-import { Button, Card, Field, Input, Select, Badge, EmptyState, Modal, DisclosureButton } from "./ui";
+import { AppStateHook, apiAdmin, uploadPhoto, uploadFile } from "@/lib/client";
+import { Button, Card, Field, Input, Select, Badge, EmptyState, Modal, DisclosureButton, TextInput, TextArea } from "./ui";
 import DatePicker from "./DatePicker";
-import { ScheduleType, PassKindChoice, ScoreRecord } from "@/lib/types";
+import { ScheduleType, PassKindChoice, ScoreRecord, NoticeAudience, Notice, NoticeAttachment, Database } from "@/lib/types";
+import { todayStr } from "@/lib/datetime";
 import {
   ACHIEVEMENT_PERIODS,
   achievementRangeLabel,
@@ -20,8 +21,56 @@ import { NeedsRetestRow, RetestHistoryRow } from "./RetestTab";
 interface IssuedCred { name: string; loginId: string; password: string }
 const RECORD_PAGE_SIZE = 30;
 
+type ManageSection = "student" | "exam" | "homework" | "notice";
+
+const MANAGE_SECTIONS: { id: ManageSection; label: string }[] = [
+  { id: "student", label: "학생관리" },
+  { id: "exam", label: "시험관리" },
+  { id: "homework", label: "숙제" },
+  { id: "notice", label: "공지사항" },
+];
+
+/** 반 선택 버튼 그리드 — 학생관리/시험관리 공용 */
+function ClassPicker({
+  db,
+  selectedId,
+  onSelect,
+}: {
+  db: Database;
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {db.classes.map((c) => {
+        const activeCount = db.students.filter((s) => s.classId === c.id && isActiveStudent(s)).length;
+        const withdrawnCount = db.students.filter((s) => s.classId === c.id && !isActiveStudent(s)).length;
+        const active = c.id === selectedId;
+        return (
+          <button
+            key={c.id}
+            onClick={() => onSelect(c.id)}
+            className={`text-left rounded-xl border px-4 py-2.5 transition ${
+              active ? "border-brand-600 bg-brand-50" : "border-lab-line hover:border-lab-line"
+            }`}
+          >
+            <div className="font-medium text-lab-ink">{c.name}</div>
+            <div className="text-xs text-lab-muted mt-0.5 flex items-center gap-1">
+              <Badge color="blue">{c.scheduleType}</Badge>
+              <Badge color="indigo">컷 {c.passThreshold}%</Badge>
+              <span>재원 {activeCount}명</span>
+              {withdrawnCount > 0 && <span>퇴원 {withdrawnCount}명</span>}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ManageTab({ app }: { app: AppStateHook }) {
   const { db, run } = app;
+  const [section, setSection] = useState<ManageSection>("student");
   const [selectedClass, setSelectedClass] = useState<string>("");
 
   // 반 추가 폼
@@ -30,6 +79,8 @@ export default function ManageTab({ app }: { app: AppStateHook }) {
   const [cut, setCut] = useState(80);
 
   const cls = db.classes.find((c) => c.id === selectedClass);
+  // 학생관리 탭에서는 선택된 반이 없으면 첫 반을 기본 표시
+  const studentCls = cls ?? db.classes[0];
 
   async function addClass() {
     if (!className.trim()) return alert("반 이름을 입력하세요.");
@@ -42,6 +93,41 @@ export default function ManageTab({ app }: { app: AppStateHook }) {
 
   return (
     <div className="space-y-4">
+      {/* 관리 하위 탭 */}
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-lab-line bg-[#e9e3d6] p-1 sm:grid-cols-4">
+        {MANAGE_SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setSection(s.id)}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              section === s.id ? "bg-lab-paper text-brand-700 shadow-lab-sm" : "text-lab-muted hover:text-lab-navy"
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {section === "homework" && <HomeworkSection app={app} />}
+      {section === "notice" && <NoticeManager app={app} />}
+
+      {section === "student" && (
+        <>
+          <Card title="반 선택">
+            {db.classes.length === 0 ? (
+              <EmptyState>아직 반이 없습니다. 「시험관리」 탭에서 먼저 반을 만들어 주세요.</EmptyState>
+            ) : (
+              <ClassPicker db={db} selectedId={studentCls?.id ?? ""} onSelect={(id) => setSelectedClass(id)} />
+            )}
+          </Card>
+
+          {studentCls && <StudentRoster key={studentCls.id} app={app} classId={studentCls.id} />}
+        </>
+      )}
+
+      {section === "exam" && (
+        <>
       {/* 반 추가 */}
       <Card title="반 만들기">
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -68,38 +154,45 @@ export default function ManageTab({ app }: { app: AppStateHook }) {
         {db.classes.length === 0 ? (
           <EmptyState>아직 반이 없습니다. 위에서 먼저 반을 만들어 주세요.</EmptyState>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {db.classes.map((c) => {
-              const activeCount = db.students.filter((s) => s.classId === c.id && isActiveStudent(s)).length;
-              const withdrawnCount = db.students.filter((s) => s.classId === c.id && !isActiveStudent(s)).length;
-              const active = c.id === selectedClass;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedClass(active ? "" : c.id)}
-                  className={`text-left rounded-xl border px-4 py-2.5 transition ${
-                    active ? "border-brand-600 bg-brand-50" : "border-lab-line hover:border-lab-line"
-                  }`}
-                >
-                  <div className="font-medium text-lab-ink">{c.name}</div>
-                  <div className="text-xs text-lab-muted mt-0.5 flex items-center gap-1">
-                    <Badge color="blue">{c.scheduleType}</Badge>
-                    <Badge color="indigo">컷 {c.passThreshold}%</Badge>
-                    <span>재원 {activeCount}명</span>
-                    {withdrawnCount > 0 && <span>퇴원 {withdrawnCount}명</span>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <ClassPicker
+            db={db}
+            selectedId={selectedClass}
+            onSelect={(id) => setSelectedClass(selectedClass === id ? "" : id)}
+          />
         )}
       </Card>
 
       <AchievementPeriodSettings app={app} />
 
-      {cls && <ClassDetail key={cls.id} app={app} classId={cls.id} />}
+      {cls && <ClassExamDetail key={cls.id} app={app} classId={cls.id} />}
 
       <ScoreRecordManager app={app} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 숙제 탭 — 반 선택 후 반별 숙제 관리 */
+function HomeworkSection({ app }: { app: AppStateHook }) {
+  const { db } = app;
+  const [classId, setClassId] = useState<string>("");
+  const cls = db.classes.find((c) => c.id === classId) ?? db.classes[0];
+
+  return (
+    <div className="space-y-4">
+      <Card title="반 선택">
+        {db.classes.length === 0 ? (
+          <EmptyState>먼저 시험관리 탭에서 반을 만들어 주세요.</EmptyState>
+        ) : (
+          <Select value={cls?.id ?? ""} onChange={(e) => setClassId(e.target.value)}>
+            {db.classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </Select>
+        )}
+      </Card>
+      {cls && <HomeworkManager key={cls.id} app={app} classId={cls.id} />}
     </div>
   );
 }
@@ -232,6 +325,342 @@ function AchievementPeriodSettings({ app }: { app: AppStateHook }) {
           </div>
         </>
       )}
+    </Card>
+  );
+}
+
+function HomeworkManager({ app, classId }: { app: AppStateHook; classId: string }) {
+  const { db, run } = app;
+  const [dueDate, setDueDate] = useState(todayStr());
+  const [content, setContent] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const list = db.homeworks
+    .filter((h) => h.classId === classId)
+    .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || b.createdAt.localeCompare(a.createdAt));
+
+  async function add() {
+    if (!content.trim()) return alert("숙제 내용을 입력하세요.");
+    setBusy(true);
+    const r = await run({ type: "createHomework", classId, dueDate, content });
+    setBusy(false);
+    if (!r.ok) return alert(r.error);
+    setContent("");
+  }
+
+  return (
+    <Card title="숙제" right={<Badge color={list.length ? "indigo" : "gray"}>{list.length}건</Badge>}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="sm:w-44">
+          <Field label="숙제 날짜">
+            <DatePicker value={dueDate} onChange={setDueDate} />
+          </Field>
+        </div>
+        <div className="flex-1">
+          <Field label="숙제 내용">
+            <TextArea value={content} onChange={setContent} rows={2} placeholder="예: Day 12 단어 외우기 + 워크북 p.30" />
+          </Field>
+        </div>
+        <Button onClick={add} disabled={busy}>{busy ? "등록 중…" : "숙제 추가"}</Button>
+      </div>
+
+      <div className="mt-4">
+        {list.length === 0 ? (
+          <EmptyState>등록된 숙제가 없습니다.</EmptyState>
+        ) : (
+          <ul className="divide-y divide-lab-line">
+            {list.map((h) => (
+              <li key={h.id} className="flex items-start justify-between gap-2 py-3">
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-lab-gold">{h.dueDate}</div>
+                  <div className="mt-0.5 whitespace-pre-wrap text-sm text-lab-ink">{h.content}</div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={async () => {
+                    if (confirm("이 숙제를 삭제할까요?")) {
+                      const r = await run({ type: "deleteHomework", id: h.id });
+                      if (!r.ok) alert(r.error);
+                    }
+                  }}
+                >
+                  삭제
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+const AUDIENCE_LABEL: Record<NoticeAudience, string> = {
+  all: "전체(보호자·학생)",
+  guardian: "보호자만",
+  student: "학생만",
+};
+
+interface NoticeDraftPayload {
+  title: string;
+  body: string;
+  audience: NoticeAudience;
+  pinned: boolean;
+  imagePaths: string[];
+  attachments: NoticeAttachment[];
+}
+
+/** 공지 작성/수정 공용 폼 — 제목·내용·대상·고정·이미지·첨부파일 */
+function NoticeForm({
+  initial,
+  submitLabel,
+  onSubmit,
+  onCancel,
+}: {
+  initial?: Notice;
+  submitLabel: string;
+  onSubmit: (p: NoticeDraftPayload) => Promise<{ ok: boolean; error?: string }>;
+  onCancel?: () => void;
+}) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [audience, setAudience] = useState<NoticeAudience>(initial?.audience ?? "all");
+  const [pinned, setPinned] = useState(!!initial?.pinned);
+  const [imagePaths, setImagePaths] = useState<string[]>(initial?.imagePaths ?? []);
+  const [attachments, setAttachments] = useState<NoticeAttachment[]>(initial?.attachments ?? []);
+  const [imgBusy, setImgBusy] = useState(false);
+  const [fileBusy, setFileBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function onPickImages(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (!files.length) return;
+    setImgBusy(true);
+    try {
+      for (const f of files) {
+        const p = await uploadPhoto(f);
+        setImagePaths((prev) => [...prev, p]);
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setImgBusy(false);
+    }
+  }
+
+  async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (!files.length) return;
+    setFileBusy(true);
+    try {
+      for (const f of files) {
+        const att = await uploadFile(f);
+        setAttachments((prev) => [...prev, att]);
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setFileBusy(false);
+    }
+  }
+
+  async function submit() {
+    if (!title.trim()) return alert("공지 제목을 입력하세요.");
+    if (!body.trim()) return alert("공지 내용을 입력하세요.");
+    setBusy(true);
+    const r = await onSubmit({ title, body, audience, pinned, imagePaths, attachments });
+    setBusy(false);
+    if (!r.ok) alert(r.error);
+  }
+
+  return (
+    <div className="space-y-3">
+      <Field label="제목">
+        <TextInput value={title} onChange={setTitle} placeholder="예: 6월 보강 안내" />
+      </Field>
+      <Field label="내용">
+        <TextArea value={body} onChange={setBody} rows={3} placeholder="공지 내용을 입력하세요 (여러 줄 가능)" />
+      </Field>
+
+      {/* 이미지 (학생·보호자에게 함께 보임) */}
+      <Field label="이미지" hint="공지에 함께 표시됩니다(학생·보호자에게도 보임).">
+        <div className="space-y-2">
+          {imagePaths.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {imagePaths.map((src, i) => (
+                <div key={i} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="공지 이미지" className="h-20 w-20 rounded-lg border border-lab-line object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setImagePaths((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-red-500 text-[11px] text-white"
+                    aria-label="이미지 삭제"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <input type="file" accept="image/*" multiple onChange={onPickImages} className="text-sm" />
+          {imgBusy && <Badge color="gray">이미지 업로드 중…</Badge>}
+        </div>
+      </Field>
+
+      {/* 첨부파일 (관리자 전용 — 학생·보호자에겐 안 보임) */}
+      <Field label="첨부파일 (관리자 전용)" hint="학생·보호자 화면에는 보이지 않습니다.">
+        <div className="space-y-2">
+          {attachments.length > 0 && (
+            <ul className="space-y-1">
+              {attachments.map((a, i) => (
+                <li key={i} className="flex items-center justify-between gap-2 rounded-lg border border-lab-line bg-lab-paper px-3 py-1.5 text-sm">
+                  <a href={a.path} target="_blank" rel="noreferrer" className="min-w-0 truncate text-brand-700 hover:underline">{a.name}</a>
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="shrink-0 text-xs text-red-600 hover:underline"
+                  >
+                    삭제
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <input type="file" multiple onChange={onPickFiles} className="text-sm" />
+          {fileBusy && <Badge color="gray">파일 업로드 중…</Badge>}
+        </div>
+      </Field>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="노출 대상">
+          <Select value={audience} onChange={(e) => setAudience(e.target.value as NoticeAudience)}>
+            <option value="all">{AUDIENCE_LABEL.all}</option>
+            <option value="guardian">{AUDIENCE_LABEL.guardian}</option>
+            <option value="student">{AUDIENCE_LABEL.student}</option>
+          </Select>
+        </Field>
+        <label className="flex h-[46px] items-center gap-2 rounded-xl border border-lab-line bg-lab-paper px-3 text-base text-lab-ink">
+          <input
+            type="checkbox"
+            checked={pinned}
+            onChange={(e) => setPinned(e.target.checked)}
+            className="h-4 w-4 rounded border-lab-line text-brand-600"
+          />
+          상단 고정
+        </label>
+        <div className="ml-auto flex gap-2">
+          {onCancel && <Button variant="ghost" onClick={onCancel} disabled={busy}>취소</Button>}
+          <Button onClick={submit} disabled={busy || imgBusy || fileBusy}>{busy ? "저장 중…" : submitLabel}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoticeManager({ app }: { app: AppStateHook }) {
+  const { db, run } = app;
+  const [editing, setEditing] = useState<Notice | null>(null);
+  const [formKey, setFormKey] = useState(0);
+
+  const notices = [...db.notices].sort(
+    (a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.createdAt.localeCompare(a.createdAt)
+  );
+
+  return (
+    <Card title="공지사항" right={<Badge color={notices.length ? "indigo" : "gray"}>{notices.length}건</Badge>}>
+      <NoticeForm
+        key={formKey}
+        submitLabel="공지 등록"
+        onSubmit={async (p) => {
+          const r = await run({ type: "createNotice", ...p });
+          if (r.ok) setFormKey((k) => k + 1);
+          return r;
+        }}
+      />
+
+      <div className="mt-4">
+        {notices.length === 0 ? (
+          <EmptyState>등록된 공지가 없습니다.</EmptyState>
+        ) : (
+          <ul className="divide-y divide-lab-line">
+            {notices.map((n) => (
+              <li key={n.id} className="py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {n.pinned && <Badge color="amber">고정</Badge>}
+                      <b className="text-sm text-lab-ink">{n.title}</b>
+                      <Badge color="gray">{AUDIENCE_LABEL[n.audience]}</Badge>
+                      <span className="text-xs text-lab-muted">{n.createdAt.slice(0, 10)}</span>
+                    </div>
+                    <div className="mt-1 whitespace-pre-wrap text-sm text-lab-muted">{n.body}</div>
+                    {(n.imagePaths?.length ?? 0) > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {n.imagePaths!.map((src, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img key={i} src={src} alt="공지 이미지" className="h-16 w-16 rounded-lg border border-lab-line object-cover" />
+                        ))}
+                      </div>
+                    )}
+                    {(n.attachments?.length ?? 0) > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge color="gray">첨부 {n.attachments!.length} (관리자만)</Badge>
+                        {n.attachments!.map((a, i) => (
+                          <a key={i} href={a.path} target="_blank" rel="noreferrer" className="text-xs text-brand-700 hover:underline">{a.name}</a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Button size="sm" variant="soft" onClick={() => setEditing(n)}>수정</Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        const r = await run({ type: "updateNotice", id: n.id, patch: { pinned: !n.pinned } });
+                        if (!r.ok) alert(r.error);
+                      }}
+                    >
+                      {n.pinned ? "고정 해제" : "고정"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={async () => {
+                        if (confirm("이 공지를 삭제할까요?")) {
+                          const r = await run({ type: "deleteNotice", id: n.id });
+                          if (!r.ok) alert(r.error);
+                        }
+                      }}
+                    >
+                      삭제
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="공지 수정" width="max-w-2xl">
+        {editing && (
+          <NoticeForm
+            initial={editing}
+            submitLabel="수정 저장"
+            onCancel={() => setEditing(null)}
+            onSubmit={async (p) => {
+              const r = await run({ type: "updateNotice", id: editing.id, patch: p });
+              if (r.ok) setEditing(null);
+              return r;
+            }}
+          />
+        )}
+      </Modal>
     </Card>
   );
 }
@@ -972,31 +1401,22 @@ function recordBadge(record: ScoreRecord) {
   return <Badge color="green">통과</Badge>;
 }
 
-function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
+/** 학생관리 — 반별 학생 계정·보호자코드·재시험 결과 관리 */
+function StudentRoster({ app, classId }: { app: AppStateHook; classId: string }) {
   const { db, run } = app;
-  const cls = db.classes.find((c) => c.id === classId)!;
   const students = db.students
     .filter((s) => s.classId === classId)
     .sort((a, b) => Number(isActiveStudent(b)) - Number(isActiveStudent(a)) || a.name.localeCompare(b.name, "ko"));
   const activeStudents = students.filter(isActiveStudent);
   const withdrawnStudents = students.filter((s) => !isActiveStudent(s));
-  const books = db.books.filter((b) => b.classId === classId);
 
   const [studentName, setStudentName] = useState("");
-  const [bookTitle, setBookTitle] = useState("");
-  const [bookTotal, setBookTotal] = useState(20);
-  const [bookCut, setBookCut] = useState<string>("");
-  const [bookPassMark, setBookPassMark] = useState<string>("");
   const [retestStudentId, setRetestStudentId] = useState<string | null>(null);
   const [selectedRetestRecordIds, setSelectedRetestRecordIds] = useState<Set<string>>(new Set());
 
   // 발급된 계정 정보(1회성 표시)
   const [issued, setIssued] = useState<IssuedCred[] | null>(null);
 
-  // 반 설정 편집
-  const [editCut, setEditCut] = useState(cls.passThreshold);
-  const [editName, setEditName] = useState(cls.name);
-  const [editSchedule, setEditSchedule] = useState<ScheduleType>(cls.scheduleType);
   const retestStudent = retestStudentId ? db.students.find((s) => s.id === retestStudentId) : null;
   const byDateDesc = (a: { examDate: string; createdAt: string }, b: { examDate: string; createdAt: string }) =>
     b.examDate.localeCompare(a.examDate) || b.createdAt.localeCompare(a.createdAt);
@@ -1094,63 +1514,8 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
     );
   }
 
-  async function addBook() {
-    if (!bookTitle.trim()) return alert("책 제목을 입력하세요.");
-    const r = await run({
-      type: "createBook",
-      classId,
-      title: bookTitle,
-      defaultTotalScore: bookTotal,
-      passThreshold: bookCut === "" ? null : Number(bookCut),
-      passMark: bookPassMark === "" ? null : Number(bookPassMark),
-    });
-    if (r.ok) {
-      setBookTitle("");
-      setBookPassMark("");
-    } else alert(r.error);
-  }
-
-  async function saveClass() {
-    const r = await run({
-      type: "updateClass",
-      id: classId,
-      patch: { name: editName, passThreshold: editCut, scheduleType: editSchedule },
-    });
-    if (!r.ok) alert(r.error);
-  }
-
   return (
     <div className="space-y-4">
-      <Card
-        title={`「${cls.name}」 설정`}
-        right={
-          <Button variant="danger" size="sm" onClick={async () => {
-            if (confirm(`'${cls.name}' 반과 소속 학생·기록을 모두 삭제할까요?`)) {
-              await run({ type: "deleteClass", id: classId });
-            }
-          }}>반 삭제</Button>
-        }
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-          <Field label="반 이름">
-            <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-          </Field>
-          <Field label="수업 요일">
-            <Select value={editSchedule} onChange={(e) => setEditSchedule(e.target.value as ScheduleType)}>
-              <option value="월수금">월수금</option>
-              <option value="화목">화목</option>
-            </Select>
-          </Field>
-          <Field label="통과 컷(%)">
-            <Input type="number" min={0} max={100} value={editCut} onChange={(e) => setEditCut(Number(e.target.value))} />
-          </Field>
-          <div className="flex items-end">
-            <Button onClick={saveClass} variant="soft" className="w-full">설정 저장</Button>
-          </div>
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* 학생 */}
         <Card title={`학생 (재원 ${activeStudents.length}명${withdrawnStudents.length ? ` · 퇴원 ${withdrawnStudents.length}명` : ""})`}>
           <div className="flex gap-2 mb-1">
@@ -1230,52 +1595,6 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
             </ul>
           )}
         </Card>
-
-        {/* 책 */}
-        <Card title={`책/단어장 (${books.length})`}>
-          <div className="grid grid-cols-3 gap-2 mb-1">
-            <Input value={bookTitle} onChange={(e) => setBookTitle(e.target.value)} placeholder="책 제목" className="col-span-3" />
-            <Field label="기본 만점">
-              <Input type="number" min={1} value={bookTotal} onChange={(e) => setBookTotal(Number(e.target.value))} />
-            </Field>
-            <Field label="통과 점수(컷)" hint="예: 51점 이상">
-              <Input type="number" min={0} step={0.5} value={bookPassMark} onChange={(e) => setBookPassMark(e.target.value)} placeholder="절대 점수" />
-            </Field>
-            <Field label="또는 컷(%)" hint="비우면 반 컷">
-              <Input type="number" min={0} max={100} value={bookCut} onChange={(e) => setBookCut(e.target.value)} placeholder={`${cls.passThreshold}`} disabled={bookPassMark !== ""} />
-            </Field>
-            <div className="col-span-3">
-              <Button onClick={addBook} className="w-full">+ 책 추가</Button>
-            </div>
-          </div>
-          <p className="text-xs text-lab-muted mb-3">통과 점수(절대)를 넣으면 그 점수 이상이면 통과합니다. (백분율 컷보다 우선)</p>
-          {books.length === 0 ? (
-            <EmptyState>책을 추가하면 점수 입력이 편해집니다.</EmptyState>
-          ) : (
-            <ul className="divide-y divide-lab-line">
-              {books.map((b) => (
-                <li key={b.id} className="flex items-center justify-between py-2">
-                  <span className="text-sm text-lab-ink">
-                    {b.title}{" "}
-                    <span className="text-xs text-lab-muted">
-                      (만점 {b.defaultTotalScore} · 컷 {b.passMark != null ? `${b.passMark}점 이상` : `${b.passThreshold ?? cls.passThreshold}%`})
-                    </span>
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={async () => {
-                      if (confirm(`'${b.title}' 책을 삭제할까요? (점수 기록은 유지됩니다)`)) {
-                        await run({ type: "deleteBook", id: b.id });
-                      }
-                    }}
-                  >삭제</Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
 
       <Modal open={!!issued} onClose={() => setIssued(null)} title="학생 로그인 계정 발급됨">
         <div className="space-y-3">
@@ -1441,6 +1760,126 @@ function ClassDetail({ app, classId }: { app: AppStateHook; classId: string }) {
           </section>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+/** 시험관리 — 반 설정(이름·요일·컷·삭제) + 반별 책/단어장 관리 */
+function ClassExamDetail({ app, classId }: { app: AppStateHook; classId: string }) {
+  const { db, run } = app;
+  const cls = db.classes.find((c) => c.id === classId)!;
+  const books = db.books.filter((b) => b.classId === classId);
+
+  const [bookTitle, setBookTitle] = useState("");
+  const [bookTotal, setBookTotal] = useState(20);
+  const [bookCut, setBookCut] = useState<string>("");
+  const [bookPassMark, setBookPassMark] = useState<string>("");
+
+  // 반 설정 편집
+  const [editCut, setEditCut] = useState(cls.passThreshold);
+  const [editName, setEditName] = useState(cls.name);
+  const [editSchedule, setEditSchedule] = useState<ScheduleType>(cls.scheduleType);
+
+  async function addBook() {
+    if (!bookTitle.trim()) return alert("책 제목을 입력하세요.");
+    const r = await run({
+      type: "createBook",
+      classId,
+      title: bookTitle,
+      defaultTotalScore: bookTotal,
+      passThreshold: bookCut === "" ? null : Number(bookCut),
+      passMark: bookPassMark === "" ? null : Number(bookPassMark),
+    });
+    if (r.ok) {
+      setBookTitle("");
+      setBookPassMark("");
+    } else alert(r.error);
+  }
+
+  async function saveClass() {
+    const r = await run({
+      type: "updateClass",
+      id: classId,
+      patch: { name: editName, passThreshold: editCut, scheduleType: editSchedule },
+    });
+    if (!r.ok) alert(r.error);
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card
+        title={`「${cls.name}」 설정`}
+        right={
+          <Button variant="danger" size="sm" onClick={async () => {
+            if (confirm(`'${cls.name}' 반과 소속 학생·기록을 모두 삭제할까요?`)) {
+              await run({ type: "deleteClass", id: classId });
+            }
+          }}>반 삭제</Button>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <Field label="반 이름">
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+          </Field>
+          <Field label="수업 요일">
+            <Select value={editSchedule} onChange={(e) => setEditSchedule(e.target.value as ScheduleType)}>
+              <option value="월수금">월수금</option>
+              <option value="화목">화목</option>
+            </Select>
+          </Field>
+          <Field label="통과 컷(%)">
+            <Input type="number" min={0} max={100} value={editCut} onChange={(e) => setEditCut(Number(e.target.value))} />
+          </Field>
+          <div className="flex items-end">
+            <Button onClick={saveClass} variant="soft" className="w-full">설정 저장</Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 책 */}
+      <Card title={`책/단어장 (${books.length})`}>
+        <div className="grid grid-cols-3 gap-2 mb-1">
+          <Input value={bookTitle} onChange={(e) => setBookTitle(e.target.value)} placeholder="책 제목" className="col-span-3" />
+          <Field label="기본 만점">
+            <Input type="number" min={1} value={bookTotal} onChange={(e) => setBookTotal(Number(e.target.value))} />
+          </Field>
+          <Field label="통과 점수(컷)" hint="예: 51점 이상">
+            <Input type="number" min={0} step={0.5} value={bookPassMark} onChange={(e) => setBookPassMark(e.target.value)} placeholder="절대 점수" />
+          </Field>
+          <Field label="또는 컷(%)" hint="비우면 반 컷">
+            <Input type="number" min={0} max={100} value={bookCut} onChange={(e) => setBookCut(e.target.value)} placeholder={`${cls.passThreshold}`} disabled={bookPassMark !== ""} />
+          </Field>
+          <div className="col-span-3">
+            <Button onClick={addBook} className="w-full">+ 책 추가</Button>
+          </div>
+        </div>
+        <p className="text-xs text-lab-muted mb-3">통과 점수(절대)를 넣으면 그 점수 이상이면 통과합니다. (백분율 컷보다 우선)</p>
+        {books.length === 0 ? (
+          <EmptyState>책을 추가하면 점수 입력이 편해집니다.</EmptyState>
+        ) : (
+          <ul className="divide-y divide-lab-line">
+            {books.map((b) => (
+              <li key={b.id} className="flex items-center justify-between py-2">
+                <span className="text-sm text-lab-ink">
+                  {b.title}{" "}
+                  <span className="text-xs text-lab-muted">
+                    (만점 {b.defaultTotalScore} · 컷 {b.passMark != null ? `${b.passMark}점 이상` : `${b.passThreshold ?? cls.passThreshold}%`})
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    if (confirm(`'${b.title}' 책을 삭제할까요? (점수 기록은 유지됩니다)`)) {
+                      await run({ type: "deleteBook", id: b.id });
+                    }
+                  }}
+                >삭제</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 }

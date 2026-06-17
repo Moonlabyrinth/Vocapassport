@@ -182,6 +182,50 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={`${inputCls} ${props.className || ""}`} />;
 }
 
+/**
+ * 한글 IME 안전 멀티라인 입력 (TextInput의 textarea 버전).
+ * 언컨트롤드(ref) + composition 처리로 조합 중 React가 DOM 값을 건드리지 않게 한다.
+ */
+export function TextArea({
+  value,
+  onChange,
+  className,
+  ...rest
+}: { value: string; onChange: (v: string) => void } & Omit<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  "value" | "onChange" | "defaultValue"
+>) {
+  const ref = React.useRef<HTMLTextAreaElement>(null);
+  const composing = React.useRef(false);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (el && !composing.current && el.value !== value) {
+      el.value = value;
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      {...rest}
+      defaultValue={value}
+      onChange={(e) => {
+        if (composing.current) return;
+        onChange(e.target.value);
+      }}
+      onCompositionStart={() => {
+        composing.current = true;
+      }}
+      onCompositionEnd={(e) => {
+        composing.current = false;
+        onChange((e.target as HTMLTextAreaElement).value);
+      }}
+      className={`${inputCls} ${className || ""}`}
+    />
+  );
+}
+
 export function Badge({
   children,
   color = "gray",

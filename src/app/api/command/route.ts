@@ -21,6 +21,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "로그인이 필요합니다." }, { status: 401 });
   }
 
+  // 재시험 일정 변경 주체는 클라이언트를 믿지 않고 세션 역할로 서버에서 주입한다.
+  if (body.type === "rescheduleRetest") {
+    body.by = sess.role === "teacher" ? "teacher" : "student";
+  }
+
   const result = await mutate((db): ActionResult => {
     const authErr = authorizeAction(db, sess, body);
     if (authErr) return { ok: false, error: authErr };

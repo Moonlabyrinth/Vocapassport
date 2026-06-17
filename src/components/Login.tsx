@@ -83,10 +83,19 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
     if (role === "student" && !loginId.trim()) return setError("아이디를 입력하세요.");
     if (!password) return setError(role === "guardian" ? "인증코드를 입력하세요." : "비밀번호를 입력하세요.");
     setBusy(true);
-    const r = await apiLogin(role, password, loginId);
-    setBusy(false);
-    if (!r.ok) return setError(r.error || "로그인 실패");
-    onSuccess();
+    try {
+      const r = await apiLogin(role, password, loginId);
+      if (!r.ok) {
+        setError(r.error || "로그인 실패");
+        return;
+      }
+      onSuccess();
+    } catch {
+      // apiLogin 은 자체적으로 오류를 흡수하지만, 예기치 못한 예외에도 버튼이 멈추지 않도록 방어.
+      setError("로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function selectRole(next: Role) {
@@ -347,7 +356,7 @@ function LeftPanel({ data }: { data: LeaderboardResponse | null }) {
       <div className="mt-auto flex items-center gap-2 pt-6 text-[12.5px] text-lab-muted">
         <Lock aria-hidden="true" className="h-4 w-4 shrink-0 text-lab-gold" />
         <span>
-          로그인 후 <b className="font-bold text-lab-ink">내 점수 · 오답 · 재시험 여부</b>를 확인할 수 있어요.
+          로그인 후 <b className="font-bold text-lab-ink">내 성적 · 재시험 여부 · 숙제</b>를 확인할 수 있어요.
         </span>
       </div>
     </>

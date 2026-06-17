@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { genId, savePhoto } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +11,27 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("file");
+    // kind=file: 공지 첨부파일(임의 형식, 선생님 전용). 그 외(기본): 이미지.
+    const kind = (form.get("kind") || "image").toString();
     if (!(file instanceof File)) {
       return NextResponse.json({ ok: false, error: "파일이 없습니다." }, { status: 400 });
     }
+
+    if (kind === "file") {
+      const sess = getSession(req);
+      if (!sess || sess.role !== "teacher") {
+        return NextResponse.json({ ok: false, error: "권한이 없습니다." }, { status: 403 });
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        return NextResponse.json({ ok: false, error: "첨부파일은 20MB 이하여야 합니다." }, { status: 400 });
+      }
+      const ext = path.extname(file.name) || "";
+      const name = `${genId("file")}${ext}`;
+      const buf = Buffer.from(await file.arrayBuffer());
+      await savePhoto(name, file.type || "application/octet-stream", buf);
+      return NextResponse.json({ ok: true, path: `/api/uploads/${name}`, name: file.name || name });
+    }
+
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ ok: false, error: "사진은 10MB 이하여야 합니다." }, { status: 400 });
     }

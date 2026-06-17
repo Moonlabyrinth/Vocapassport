@@ -24,8 +24,10 @@ import {
 } from "@/lib/logic";
 import { formatDateTime, relativeFromNow } from "@/lib/datetime";
 import { recordLessonLabel } from "@/lib/course";
-import { ScoreRecord } from "@/lib/types";
+import { ScoreRecord, RetestSchedule } from "@/lib/types";
 import RetestScheduler from "./RetestScheduler";
+import RetestReschedule, { RescheduleHistory } from "./RetestReschedule";
+import { NoticeBoard, HomeworkBoard } from "./BoardCards";
 import StudentReport, { StudentReportMonth } from "./StudentReport";
 import CreatorFooter from "@/components/CreatorFooter";
 import {
@@ -69,8 +71,10 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
   const myClass = db.classes[0];
 
   const [retestFor, setRetestFor] = useState<ScoreRecord | null>(null);
+  const [rescheduleFor, setRescheduleFor] = useState<RetestSchedule | null>(null);
   const [showPw, setShowPw] = useState(false);
   const [activeTab, setActiveTab] = useState<"word" | "monthly">("word");
+  const [showAllScores, setShowAllScores] = useState(false);
 
   const records = db.records;
   const monthlyResults = [...db.monthlyTests]
@@ -215,6 +219,18 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
       cut: cutPercent(r),
     }));
 
+  // 내 성적 표: 최근 2주(최소 6건)만 펼치고 나머지는 접어 화면을 짧게 유지
+  const sortedRecords = [...records].sort((a, b) =>
+    `${b.examDate}${b.createdAt}`.localeCompare(`${a.examDate}${a.createdAt}`)
+  );
+  const recentScoreCutoff = (() => {
+    const twoWeeksAgo = localDateKey(new Date(Date.now() - 14 * 86400000));
+    const within = sortedRecords.filter((r) => r.examDate >= twoWeeksAgo).length;
+    return Math.min(sortedRecords.length, Math.max(6, within));
+  })();
+  const visibleScoreRecords = showAllScores ? sortedRecords : sortedRecords.slice(0, recentScoreCutoff);
+  const hiddenScoreCount = sortedRecords.length - visibleScoreRecords.length;
+
   return (
     <div className="min-h-screen pb-10">
       <header className="bg-lab-paper border-b border-lab-line sticky top-0 z-30">
@@ -240,6 +256,65 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
             <Button size="sm" variant="soft" onClick={() => setShowPw(true)}>변경하기</Button>
           </div>
         )}
+
+        {db.notices.length > 0 && <NoticeBoard notices={db.notices} />}
+        <HomeworkBoard homeworks={db.homeworks} />
+
+        {/* 재시험 필요 (숙제 아래 항상 노출) */}
+        {needScheduling.length > 0 && (
+          <Card title="재시험을 예약하세요">
+            <ul className="space-y-2">
+              {needScheduling.map((r) => (
+                <li key={r.id} className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                  <div className="text-sm">
+                    <div className="font-medium text-lab-ink">{r.bookTitle}</div>
+                    <div className="text-lab-muted">
+                      {recordLessonLabel(r)} · {r.actualScore}/{r.totalScore} · 컷 {cutLabel(r)} 미달
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={() => setRetestFor(r)}>재시험 예약</Button>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
+        {/* 예약된 재시험 (숙제 아래 항상 노출) */}
+        <Card title={`예약된 재시험 (${scheduledRetests.length})`}>
+          {scheduledRetests.length === 0 ? (
+            <EmptyState>예약된 재시험이 없습니다.</EmptyState>
+          ) : (
+            <ul className="space-y-2">
+              {scheduledRetests.map((rt) => {
+                const origin = db.records.find((r) => r.id === rt.scoreRecordId);
+                const soon = new Date(rt.scheduledAt).getTime() - Date.now() < 2 * 3600 * 1000;
+                const past = new Date(rt.scheduledAt).getTime() < Date.now();
+                return (
+                  <li key={rt.id} className={`rounded-xl border px-4 py-3 ${past ? "border-red-200 bg-red-50" : "border-lab-line"}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm">
+                        <div className="font-medium text-lab-ink">{formatDateTime(rt.scheduledAt)}</div>
+                        <div className="text-lab-muted">{origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : ""}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge color={past ? "red" : soon ? "amber" : "blue"}>{relativeFromNow(rt.scheduledAt)}</Badge>
+                        <Button size="sm" variant="soft" onClick={() => setRescheduleFor(rt)}>일정 변경</Button>
+                        <Button size="sm" variant="ghost" onClick={async () => {
+                          if (confirm("이 재시험 예약을 취소할까요?")) await app.run({ type: "cancelRetest", id: rt.id });
+                        }}>취소</Button>
+                      </div>
+                    </div>
+                    {past && <div className="mt-1 text-xs font-medium text-red-600">예약 시각이 지났어요. 일정을 다시 잡아주세요.</div>}
+                    <RescheduleHistory retest={rt} />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="text-xs text-lab-muted mt-3">
+            ※ 예약 24시간 전·2시간 전 알림은 추후 휴대폰 푸시로 제공됩니다. (현재는 일정·남은시간 표시)
+          </p>
+        </Card>
 
         <div className="grid grid-cols-2 rounded-xl border border-lab-line bg-[#e9e3d6] p-1">
           <button
@@ -303,57 +378,6 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
               <Stat label="만점" value={stats.perfectCount} accent="amber" sub={`연속 ${stats.currentPerfectStreak}`} />
             </div>
 
-            {/* 재시험 필요 */}
-            {needScheduling.length > 0 && (
-              <Card title="재시험을 예약하세요">
-                <ul className="space-y-2">
-                  {needScheduling.map((r) => (
-                    <li key={r.id} className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-                      <div className="text-sm">
-                        <div className="font-medium text-lab-ink">{r.bookTitle}</div>
-                        <div className="text-lab-muted">
-                          {recordLessonLabel(r)} · {r.actualScore}/{r.totalScore} · 컷 {cutLabel(r)} 미달
-                        </div>
-                      </div>
-                      <Button size="sm" onClick={() => setRetestFor(r)}>재시험 예약</Button>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
-
-            {/* 예약된 재시험 */}
-            <Card title={`예약된 재시험 (${scheduledRetests.length})`}>
-              {scheduledRetests.length === 0 ? (
-                <EmptyState>예약된 재시험이 없습니다.</EmptyState>
-              ) : (
-                <ul className="space-y-2">
-                  {scheduledRetests.map((rt) => {
-                    const origin = db.records.find((r) => r.id === rt.scoreRecordId);
-                    const soon = new Date(rt.scheduledAt).getTime() - Date.now() < 2 * 3600 * 1000;
-                    const past = new Date(rt.scheduledAt).getTime() < Date.now();
-                    return (
-                      <li key={rt.id} className="flex items-center justify-between rounded-xl border border-lab-line px-4 py-3">
-                        <div className="text-sm">
-                          <div className="font-medium text-lab-ink">{formatDateTime(rt.scheduledAt)}</div>
-                          <div className="text-lab-muted">{origin ? `${origin.bookTitle} · ${recordLessonLabel(origin)}` : ""}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge color={past ? "red" : soon ? "amber" : "blue"}>{relativeFromNow(rt.scheduledAt)}</Badge>
-                          <Button size="sm" variant="ghost" onClick={async () => {
-                            if (confirm("이 재시험 예약을 취소할까요?")) await app.run({ type: "cancelRetest", id: rt.id });
-                          }}>취소</Button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              <p className="text-xs text-lab-muted mt-3">
-                ※ 예약 24시간 전·2시간 전 알림은 추후 휴대폰 푸시로 제공됩니다. (현재는 일정·남은시간 표시)
-              </p>
-            </Card>
-
             {/* 추이 */}
             {trend.length > 0 && (
               <Card title="내 점수 추이">
@@ -389,7 +413,7 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {[...records].sort((a, b) => `${b.examDate}${b.createdAt}`.localeCompare(`${a.examDate}${a.createdAt}`)).map((r) => (
+                      {visibleScoreRecords.map((r) => (
                         <tr key={r.id} className="border-b border-lab-line">
                           <td className="py-2 pr-3 text-lab-muted">{r.examDate.slice(5)}</td>
                           <td className="py-2 pr-3 text-lab-ink">{r.bookTitle}</td>
@@ -416,6 +440,13 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                       ))}
                     </tbody>
                   </table>
+                  {(hiddenScoreCount > 0 || showAllScores) && sortedRecords.length > recentScoreCutoff && (
+                    <div className="mt-3 flex justify-center">
+                      <Button size="sm" variant="soft" onClick={() => setShowAllScores((v) => !v)}>
+                        {showAllScores ? "최근 성적만 보기" : `지난 성적 ${hiddenScoreCount}건 더 보기`}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
@@ -441,6 +472,9 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
                         <div className="flex flex-wrap gap-2">
                           <Badge color="indigo" size="lg">총점 {round1(total)} / {max}</Badge>
                           <Badge color="green" size="lg">백점환산 {pct}점</Badge>
+                          {t.classStat && (
+                            <Badge color="gray" size="lg">반 평균 {t.classStat.avgPercent}점</Badge>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -464,6 +498,12 @@ export default function StudentApp({ app }: { app: AppStateHook }) {
       <Modal open={!!retestFor} onClose={() => setRetestFor(null)} title="재시험 일정 예약">
         {retestFor && (
           <RetestScheduler app={app} record={retestFor} onDone={() => setRetestFor(null)} />
+        )}
+      </Modal>
+
+      <Modal open={!!rescheduleFor} onClose={() => setRescheduleFor(null)} title="재시험 일정 변경">
+        {rescheduleFor && (
+          <RetestReschedule app={app} retest={rescheduleFor} onDone={() => setRescheduleFor(null)} />
         )}
       </Modal>
 

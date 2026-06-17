@@ -10,6 +10,8 @@ import {
   RetestSchedule,
   PassKindChoice,
   MonthlySection,
+  NoticeAudience,
+  NoticeAttachment,
 } from "./types";
 import { isPassed, isPerfect, resolveThreshold, type AchievementPeriod } from "./logic";
 
@@ -62,7 +64,14 @@ export type Action =
   | { type: "deleteRecord"; id: string }
   | { type: "deleteRecords"; ids: string[] }
   | { type: "scheduleRetest"; scoreRecordId: string; scheduledAt: string }
+  | { type: "rescheduleRetest"; id: string; scheduledAt: string; by?: "teacher" | "student" }
   | { type: "cancelRetest"; id: string }
+  | { type: "createHomework"; classId: string; dueDate: string; content: string }
+  | { type: "updateHomework"; id: string; patch: Partial<{ dueDate: string; content: string }> }
+  | { type: "deleteHomework"; id: string }
+  | { type: "createNotice"; title: string; body: string; audience?: NoticeAudience; pinned?: boolean; imagePaths?: string[]; attachments?: NoticeAttachment[] }
+  | { type: "updateNotice"; id: string; patch: Partial<{ title: string; body: string; audience: NoticeAudience; pinned: boolean; imagePaths: string[]; attachments: NoticeAttachment[] }> }
+  | { type: "deleteNotice"; id: string }
   | { type: "setRecordPassStatus"; recordId: string; passed: boolean | null }
   | { type: "setRecordsPassStatus"; recordIds: string[]; passed: boolean | null }
   | { type: "setRetestPassStatus"; recordId: string; passed: boolean | null }
@@ -355,10 +364,100 @@ export function applyAction(db: Database, a: Action): ActionResult {
       db.retests.push(rt);
       return { ok: true, id };
     }
+    case "rescheduleRetest": {
+      const rt = db.retests.find((x) => x.id === a.id);
+      if (!rt) return { ok: false, error: "예약을 찾을 수 없습니다." };
+      if (rt.status !== "scheduled") return { ok: false, error: "진행 중인 예약만 일정을 변경할 수 있습니다." };
+      const minErr = validate10min(a.scheduledAt);
+      if (minErr) return { ok: false, error: minErr };
+      if (a.scheduledAt === rt.scheduledAt) return { ok: false, error: "기존과 같은 일시입니다." };
+      (rt.reschedules ??= []).push({
+        from: rt.scheduledAt,
+        to: a.scheduledAt,
+        by: a.by ?? "teacher",
+        at: now,
+      });
+      rt.scheduledAt = a.scheduledAt;
+      return { ok: true, id: rt.id };
+    }
     case "cancelRetest": {
       const rt = db.retests.find((x) => x.id === a.id);
       if (!rt) return { ok: false, error: "예약을 찾을 수 없습니다." };
       rt.status = "canceled";
+      return { ok: true };
+    }
+
+    case "createHomework": {
+      if (!findClass(db, a.classId)) return { ok: false, error: "반을 먼저 선택하세요." };
+      if (!a.content?.trim()) return { ok: false, error: "숙제 내용을 입력하세요." };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(a.dueDate || "")) return { ok: false, error: "숙제 날짜를 선택하세요." };
+      const id = genId("hw");
+      db.homeworks.push({
+        id,
+        classId: a.classId,
+        dueDate: a.dueDate,
+        content: a.content.trim(),
+        createdAt: now,
+        updatedAt: now,
+      });
+      return { ok: true, id };
+    }
+    case "updateHomework": {
+      const h = db.homeworks.find((x) => x.id === a.id);
+      if (!h) return { ok: false, error: "숙제를 찾을 수 없습니다." };
+      if (a.patch.dueDate != null) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(a.patch.dueDate)) return { ok: false, error: "숙제 날짜 형식이 올바르지 않습니다." };
+        h.dueDate = a.patch.dueDate;
+      }
+      if (a.patch.content != null) {
+        if (!a.patch.content.trim()) return { ok: false, error: "숙제 내용을 입력하세요." };
+        h.content = a.patch.content.trim();
+      }
+      h.updatedAt = now;
+      return { ok: true, id: h.id };
+    }
+    case "deleteHomework": {
+      db.homeworks = db.homeworks.filter((h) => h.id !== a.id);
+      return { ok: true };
+    }
+
+    case "createNotice": {
+      if (!a.title?.trim()) return { ok: false, error: "공지 제목을 입력하세요." };
+      if (!a.body?.trim()) return { ok: false, error: "공지 내용을 입력하세요." };
+      const id = genId("nt");
+      db.notices.push({
+        id,
+        title: a.title.trim(),
+        body: a.body.trim(),
+        audience: normAudience(a.audience),
+        pinned: !!a.pinned,
+        imagePaths: normImagePaths(a.imagePaths),
+        attachments: normAttachments(a.attachments),
+        createdAt: now,
+        updatedAt: now,
+      });
+      return { ok: true, id };
+    }
+    case "updateNotice": {
+      const n = db.notices.find((x) => x.id === a.id);
+      if (!n) return { ok: false, error: "공지를 찾을 수 없습니다." };
+      if (a.patch.title != null) {
+        if (!a.patch.title.trim()) return { ok: false, error: "공지 제목을 입력하세요." };
+        n.title = a.patch.title.trim();
+      }
+      if (a.patch.body != null) {
+        if (!a.patch.body.trim()) return { ok: false, error: "공지 내용을 입력하세요." };
+        n.body = a.patch.body.trim();
+      }
+      if (a.patch.audience != null) n.audience = normAudience(a.patch.audience);
+      if (a.patch.pinned != null) n.pinned = a.patch.pinned;
+      if (a.patch.imagePaths != null) n.imagePaths = normImagePaths(a.patch.imagePaths);
+      if (a.patch.attachments != null) n.attachments = normAttachments(a.patch.attachments);
+      n.updatedAt = now;
+      return { ok: true, id: n.id };
+    }
+    case "deleteNotice": {
+      db.notices = db.notices.filter((n) => n.id !== a.id);
       return { ok: true };
     }
     case "setRecordPassStatus":
@@ -654,6 +753,22 @@ function normAchievementPeriods(periods: AchievementPeriod[]): { ok: true; perio
   }
   if (out.length === 0) return { ok: false, error: "성취 평가 구간을 1개 이상 입력하세요." };
   return { ok: true, periods: out };
+}
+
+function normAudience(a: NoticeAudience | undefined): NoticeAudience {
+  return a === "guardian" || a === "student" ? a : "all";
+}
+
+/** 업로드 경로만 허용(외부 URL 등 차단), 최대 8장 */
+function normImagePaths(paths: string[] | undefined): string[] {
+  return [...new Set((paths || []).filter((p) => typeof p === "string" && p.startsWith("/api/uploads/")))].slice(0, 8);
+}
+
+function normAttachments(items: NoticeAttachment[] | undefined): NoticeAttachment[] {
+  return (items || [])
+    .filter((a) => a && typeof a.path === "string" && a.path.startsWith("/api/uploads/"))
+    .map((a) => ({ name: (a.name || "첨부파일").toString().slice(0, 120), path: a.path }))
+    .slice(0, 20);
 }
 
 function clampPct(n: number): number {

@@ -28,12 +28,27 @@ export async function apiLogin(
   password: string,
   loginId?: string
 ): Promise<{ ok: boolean; error?: string; setup?: boolean; user?: CurrentUser }> {
-  const res = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role, password, loginId }),
-  });
-  return res.json();
+  // 네트워크 지연/무응답에도 버튼이 "확인 중…"으로 멈추지 않도록 타임아웃을 둔다.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role, password, loginId }),
+      signal: ctrl.signal,
+    });
+    // 서버 오류(500 등)로 JSON이 아닌 응답이 와도 throw 하지 않고 오류 메시지로 변환.
+    try {
+      return await res.json();
+    } catch {
+      return { ok: false, error: "서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    }
+  } catch {
+    return { ok: false, error: "네트워크 오류로 로그인하지 못했습니다. 인터넷 연결을 확인해 주세요." };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function apiLogout(): Promise<void> {
@@ -90,6 +105,17 @@ export async function uploadPhoto(file: File): Promise<string> {
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || "업로드 실패");
   return json.path as string;
+}
+
+/** 공지 첨부파일 업로드(임의 형식·선생님 전용) → { path, name } */
+export async function uploadFile(file: File): Promise<{ path: string; name: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("kind", "file");
+  const res = await fetch("/api/upload", { method: "POST", body: fd });
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || "업로드 실패");
+  return { path: json.path as string, name: (json.name as string) || file.name };
 }
 
 export type AppStatus = "loading" | "unauth" | "ready" | "error";

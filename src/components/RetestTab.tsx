@@ -9,6 +9,7 @@ import { cutLabel, isActiveStudent, passKindLabel, passKindColor } from "@/lib/l
 import { recordLessonLabel } from "@/lib/course";
 import DatePicker from "./DatePicker";
 import RetestScheduler from "./RetestScheduler";
+import RetestReschedule, { RescheduleHistory } from "./RetestReschedule";
 
 interface RowSelection {
   checked: boolean;
@@ -81,6 +82,7 @@ export default function RetestTab({ app }: { app: AppStateHook }) {
     .slice(0, 50);
 
   const [resultFor, setResultFor] = useState<RetestSchedule | null>(null);
+  const [rescheduleFor, setRescheduleFor] = useState<RetestSchedule | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // 결과 기록이 있는(= 판정 변경 가능한) 지난 재시험만 선택 대상
@@ -111,7 +113,13 @@ export default function RetestTab({ app }: { app: AppStateHook }) {
         ) : (
           <ul className="space-y-2">
             {scheduled.map((rt) => (
-              <RetestRow key={rt.id} app={app} rt={rt} onEnter={() => setResultFor(rt)} />
+              <RetestRow
+                key={rt.id}
+                app={app}
+                rt={rt}
+                onEnter={() => setResultFor(rt)}
+                onReschedule={() => setRescheduleFor(rt)}
+              />
             ))}
           </ul>
         )}
@@ -165,6 +173,12 @@ export default function RetestTab({ app }: { app: AppStateHook }) {
       <Modal open={!!resultFor} onClose={() => setResultFor(null)} title="재시험 결과 입력">
         {resultFor && (
           <ResultEntry app={app} rt={resultFor} onClose={() => setResultFor(null)} />
+        )}
+      </Modal>
+
+      <Modal open={!!rescheduleFor} onClose={() => setRescheduleFor(null)} title="재시험 일정 변경">
+        {rescheduleFor && (
+          <RetestReschedule app={app} retest={rescheduleFor} onDone={() => setRescheduleFor(null)} />
         )}
       </Modal>
     </div>
@@ -293,10 +307,12 @@ function RetestRow({
   app,
   rt,
   onEnter,
+  onReschedule,
 }: {
   app: AppStateHook;
   rt: RetestSchedule;
   onEnter: () => void;
+  onReschedule: () => void;
 }) {
   const { db, run } = app;
   const st = db.students.find((s) => s.id === rt.studentId);
@@ -306,7 +322,7 @@ function RetestRow({
   const past = new Date(rt.scheduledAt).getTime() < Date.now();
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-lab-line px-4 py-3">
+    <li className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 ${past ? "border-red-200 bg-red-50" : "border-lab-line"}`}>
       <div>
         <div className="font-medium text-lab-ink">
           {st?.name} <span className="text-xs text-lab-muted">· {cls?.name}</span>
@@ -319,9 +335,11 @@ function RetestRow({
           <span className="text-lab-ink">{formatDateTime(rt.scheduledAt)}</span>
           <Badge color={past ? "red" : soon ? "amber" : "blue"}>{relativeFromNow(rt.scheduledAt)}</Badge>
         </div>
+        <RescheduleHistory retest={rt} />
       </div>
       <div className="flex gap-2">
         <Button size="sm" onClick={onEnter}>결과 입력</Button>
+        <Button size="sm" variant="soft" onClick={onReschedule}>일정 변경</Button>
         <Button
           size="sm"
           variant="ghost"

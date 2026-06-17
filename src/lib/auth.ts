@@ -154,6 +154,12 @@ export function authorizeAction(
       if (rec.studentId !== sess.id) return "본인 기록만 예약할 수 있습니다.";
       return null;
     }
+    case "rescheduleRetest": {
+      const rt = db.retests.find((r) => r.id === action.id);
+      if (!rt) return "예약을 찾을 수 없습니다.";
+      if (rt.studentId !== sess.id) return "본인 예약만 변경할 수 있습니다.";
+      return null;
+    }
     case "cancelRetest": {
       const rt = db.retests.find((r) => r.id === action.id);
       if (!rt) return "예약을 찾을 수 없습니다.";

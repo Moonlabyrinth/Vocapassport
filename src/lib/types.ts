@@ -103,6 +103,14 @@ export interface ScoreRecord {
 
 export type RetestStatus = "scheduled" | "completed" | "missed" | "canceled";
 
+/** 재시험 일정 변경 1건 (변경 전/후 일시 + 변경 주체) */
+export interface RetestChange {
+  from: string; // 변경 전 ISO
+  to: string; // 변경 후 ISO
+  by: "teacher" | "student"; // 변경 주체 — 서버에서 세션 기준으로 주입
+  at: string; // 변경 시각 ISO
+}
+
 /** 재시험 예약 */
 export interface RetestSchedule {
   id: string;
@@ -116,7 +124,44 @@ export interface RetestSchedule {
   resultRecordId: string | null;
   notify24Sent: boolean;
   notify2Sent: boolean;
+  /** 일정 변경 이력 (오래된 순). 변경이 없으면 없음/빈 배열 */
+  reschedules?: RetestChange[];
   createdAt: string;
+}
+
+// ===================== 숙제 / 공지사항 =====================
+/** 숙제 — 반별, 날짜별로 누적 */
+export interface Homework {
+  id: string;
+  classId: string;
+  dueDate: string; // YYYY-MM-DD
+  content: string; // 여러 줄 가능
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 공지 노출 대상 */
+export type NoticeAudience = "all" | "guardian" | "student";
+
+/** 공지 첨부파일 (관리자 전용 — 학생/보호자 화면엔 노출 안 함) */
+export interface NoticeAttachment {
+  name: string; // 원본 파일명 (표시용)
+  path: string; // 저장 경로 (/api/uploads/...)
+}
+
+/** 학원 공지사항 (반 무관, 전체) */
+export interface Notice {
+  id: string;
+  title: string;
+  body: string;
+  audience: NoticeAudience; // 기본 "all"
+  pinned?: boolean;
+  /** 모두에게(학생·보호자 포함) 인라인으로 보여줄 이미지 경로들 */
+  imagePaths?: string[];
+  /** 관리자 전용 첨부파일 — 스코프에서 학생/보호자 뷰에는 제거됨 */
+  attachments?: NoticeAttachment[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ===================== 먼슬리 테스트 (단어시험과 별개) =====================
@@ -136,6 +181,26 @@ export interface MonthlyTest {
   date: string; // YYYY-MM-DD
   sections: MonthlySection[];
   createdAt: string;
+  /** (스코프 뷰 전용) 학생 본인 반 평균. 학생/보호자 화면에서만 채워짐 */
+  classStat?: MonthlyClassStat | null;
+}
+
+/** (스코프 뷰 전용·서버 계산) 먼슬리 1회의 '본인 반' 평균 — 원본 DB엔 저장하지 않음 */
+export interface MonthlyClassStat {
+  classId: string;
+  avgTotal: number; // 반 평균 총점
+  avgPercent: number; // 반 평균 백점환산
+  count: number; // 집계에 포함된 학생 수
+  sectionAverages?: MonthlySectionAverage[];
+}
+
+export interface MonthlySectionAverage {
+  key: string;
+  label: string;
+  maxScore: number;
+  avgScore: number | null;
+  avgPercent: number | null;
+  count: number;
 }
 
 /** 먼슬리 결과 — 학생별 영역 점수 */
@@ -175,6 +240,8 @@ export interface Database {
   retests: RetestSchedule[];
   monthlyTests: MonthlyTest[];
   monthlyResults: MonthlyResult[];
+  homeworks: Homework[];
+  notices: Notice[];
   settings: Settings;
 }
 
@@ -186,5 +253,7 @@ export const emptyDatabase = (): Database => ({
   retests: [],
   monthlyTests: [],
   monthlyResults: [],
+  homeworks: [],
+  notices: [],
   settings: {},
 });

@@ -1,6 +1,43 @@
 // 역할별 데이터 스코핑 + 민감정보 제거 (순수 함수)
 
-import { Database, Student, SafeStudent, Settings } from "./types";
+import { Database, Student, SafeStudent, Settings, MonthlyTest } from "./types";
+import { monthlyTotal, monthlyPercent } from "./logic";
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** 한 먼슬리에 대한 '본인 반' 평균 (집계만, 개별 데이터 없음) */
+function classStatForTest(db: Database, test: MonthlyTest, classId: string) {
+  const classStudentIds = new Set(db.students.filter((s) => s.classId === classId).map((s) => s.id));
+  const results = db.monthlyResults.filter((r) => r.monthlyTestId === test.id && classStudentIds.has(r.studentId));
+  if (results.length === 0) return null;
+  const avgTotal = results.reduce((a, r) => a + monthlyTotal(r.scores, test), 0) / results.length;
+  const avgPercent = results.reduce((a, r) => a + monthlyPercent(r.scores, test), 0) / results.length;
+  const sectionAverages = test.sections.map((section) => {
+    const values = results
+      .map((r) => r.scores[section.key])
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const avgScore = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+    return {
+      key: section.key,
+      label: section.label,
+      maxScore: section.maxScore,
+      avgScore: avgScore == null ? null : round1(avgScore),
+      avgPercent: avgScore == null || section.maxScore <= 0 ? null : round1((avgScore / section.maxScore) * 100),
+      count: values.length,
+    };
+  });
+  return { classId, avgTotal: round1(avgTotal), avgPercent: round1(avgPercent), count: results.length, sectionAverages };
+}
+
+/** 공지를 시청자 역할에 맞게 필터 + 관리자 전용 첨부파일 제거 */
+function visibleNoticesFor(db: Database, viewerRole: "student" | "guardian") {
+  return db.notices
+    .filter((n) => n.audience === "all" || n.audience === viewerRole)
+    .map(({ attachments, ...rest }) => {
+      void attachments; // 학생/보호자 화면엔 첨부파일 노출 안 함
+      return rest;
+    });
+}
 
 /** 학생에서 비밀번호 해시/솔트 제거 (loginId 는 유지 — 선생님이 배포에 필요) */
 export function sanitizeStudent(s: Student): SafeStudent {
@@ -33,7 +70,11 @@ export function teacherView(db: Database): Database {
 }
 
 /** 학생용: 본인 데이터만 담은 Database (다른 학생/반/설정 미포함) */
-export function studentView(db: Database, studentId: string): Database {
+export function studentView(
+  db: Database,
+  studentId: string,
+  viewerRole: "student" | "guardian" = "student"
+): Database {
   const me = db.students.find((s) => s.id === studentId);
   if (!me) {
     return {
@@ -44,21 +85,28 @@ export function studentView(db: Database, studentId: string): Database {
       retests: [],
       monthlyTests: [],
       monthlyResults: [],
+      homeworks: [],
+      notices: [],
       settings: publicSettings(db.settings),
     };
   }
   const myClass = db.classes.find((c) => c.id === me.classId);
-  // 본인이 결과가 있는 먼슬리 테스트만 (정의 표시용)
+  // 본인이 결과가 있는 먼슬리 테스트만 (정의 표시용) + 본인 반 평균 첨부
   const myMonthlyResults = db.monthlyResults.filter((r) => r.studentId === studentId);
   const myTestIds = new Set(myMonthlyResults.map((r) => r.monthlyTestId));
+  const monthlyTests = db.monthlyTests
+    .filter((t) => myTestIds.has(t.id))
+    .map((t) => ({ ...t, classStat: classStatForTest(db, t, me.classId) }));
   return {
     classes: myClass ? [myClass] : [],
     students: [selfStudent(me) as unknown as Student],
     books: db.books.filter((b) => b.classId === me.classId),
     records: db.records.filter((r) => r.studentId === studentId),
     retests: db.retests.filter((r) => r.studentId === studentId),
-    monthlyTests: db.monthlyTests.filter((t) => myTestIds.has(t.id)),
+    monthlyTests,
     monthlyResults: myMonthlyResults,
+    homeworks: db.homeworks.filter((h) => h.classId === me.classId),
+    notices: visibleNoticesFor(db, viewerRole),
     settings: publicSettings(db.settings),
   };
 }
@@ -69,5 +117,5 @@ export function studentView(db: Database, studentId: string): Database {
  * 보호자 화면은 자동 집계 데이터만 표시(복습 단어·코멘트 없음).
  */
 export function guardianView(db: Database, studentId: string): Database {
-  return studentView(db, studentId);
+  return studentView(db, studentId, "guardian");
 }

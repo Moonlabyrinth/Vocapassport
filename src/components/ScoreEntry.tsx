@@ -26,11 +26,19 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 이동/지난 반 성적 입력 모드: 반이 바뀐 학생의 과거 반 성적 입력용
+  const [pastClassMode, setPastClassMode] = useState(false);
 
   // 방금 만든 미통과 기록 → 재시험 예약 모달
   const [retestFor, setRetestFor] = useState<ScoreRecord | null>(null);
 
-  const students = db.students.filter((s) => s.classId === classId && isActiveStudent(s));
+  const students = useMemo(() => {
+    if (pastClassMode) {
+      // 반 무관 전체 학생(퇴원 포함). 위에서 고른 반이 기록의 '지난 반'이 된다.
+      return [...db.students].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    }
+    return db.students.filter((s) => s.classId === classId && isActiveStudent(s));
+  }, [db.students, classId, pastClassMode]);
   const books = db.books.filter((b) => b.classId === classId);
   const cls = db.classes.find((c) => c.id === classId);
   const book = db.books.find((b) => b.id === bookId) || null;
@@ -134,6 +142,21 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
       )}
 
       <Card title="점수 입력">
+        <label className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-lab-line bg-[#f1ede2] px-3 py-2 text-sm text-lab-ink">
+          <input
+            type="checkbox"
+            checked={pastClassMode}
+            onChange={(e) => {
+              setPastClassMode(e.target.checked);
+              setStudentId("");
+            }}
+            className="h-4 w-4 rounded border-lab-line text-brand-600"
+          />
+          <span className="font-medium">이동·지난 반 성적 입력</span>
+          <span className="text-xs text-lab-muted">
+            반이 바뀐 학생의 <b>지난 반(위에서 고른 반)</b> 성적을 입력할 때 켜세요. 선택한 반의 책·통과컷이 적용됩니다.
+          </span>
+        </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="반">
             <Select value={classId} onChange={(e) => resetClass(e.target.value)}>
@@ -143,12 +166,18 @@ export default function ScoreEntry({ app }: { app: AppStateHook }) {
               ))}
             </Select>
           </Field>
-          <Field label="이름">
+          <Field label="이름" hint={pastClassMode ? "전체 학생 중 선택 (괄호는 현재 반)" : undefined}>
             <Select value={studentId} onChange={(e) => setStudentId(e.target.value)} disabled={!classId}>
               <option value="">학생 선택</option>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
+              {students.map((s) => {
+                const sc = pastClassMode ? db.classes.find((c) => c.id === s.classId) : null;
+                const label = pastClassMode
+                  ? `${s.name}${sc ? ` (현재 ${sc.name})` : ""}${isActiveStudent(s) ? "" : " · 퇴원"}`
+                  : s.name;
+                return (
+                  <option key={s.id} value={s.id}>{label}</option>
+                );
+              })}
             </Select>
           </Field>
           <Field label="회독">

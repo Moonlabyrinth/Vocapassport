@@ -2,7 +2,9 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { AppStateHook, apiLogout } from "@/lib/client";
+import type { MonthlyResult, MonthlyTest } from "@/lib/types";
 import { Card, EmptyState } from "./ui";
+import { NoticeBoard, HomeworkBoard } from "./BoardCards";
 import CreatorFooter from "@/components/CreatorFooter";
 import {
   avgPercent,
@@ -15,6 +17,9 @@ import {
   isExempt,
   isMainPass,
   isRetestPass,
+  monthlyMaxTotal,
+  monthlyPercent,
+  monthlyTotal,
   percentOf,
   resolveAchievementPeriods,
   round1,
@@ -25,6 +30,8 @@ import {
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
+
+type GuardianMonthlyReport = { test: MonthlyTest; result: MonthlyResult };
 
 function localDateKey(date = new Date()): string {
   const y = date.getFullYear();
@@ -66,6 +73,7 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
 
   const [seasonLabel, setSeasonLabel] = useState<string>("");
   const [periodKey, setPeriodKey] = useState<string>("all"); // "all" | period.key
+  const [scoreView, setScoreView] = useState<"word" | "monthly">("word");
   useEffect(() => {
     if (!groups.some((g) => g.seasonLabel === seasonLabel)) {
       setSeasonLabel(defaultPeriod?.seasonLabel ?? groups[0]?.seasonLabel ?? "");
@@ -84,6 +92,18 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
     if (!group) return [];
     return periodKey === "all" ? group.periods : group.periods.filter((p) => p.key === periodKey);
   }, [group, periodKey]);
+
+  const monthlyReports = useMemo(() => {
+    const inScope = (date: string) => activePeriods.some((p) => isDateInRange(date, p.startDate, p.endDate));
+    return [...db.monthlyTests]
+      .filter((test) => inScope(test.date))
+      .map((test) => ({
+        test,
+        result: db.monthlyResults.find((result) => result.monthlyTestId === test.id) ?? null,
+      }))
+      .filter((item): item is GuardianMonthlyReport => item.result !== null)
+      .sort((a, b) => b.test.date.localeCompare(a.test.date));
+  }, [activePeriods, db.monthlyResults, db.monthlyTests]);
 
   const selectedPeriod = group?.periods.find((p) => p.key === periodKey) ?? null;
   const scopeLabel = periodKey === "all" ? group?.seasonLabel ?? "이번 학기" : selectedPeriod?.label ?? "";
@@ -221,112 +241,227 @@ export default function GuardianApp({ app }: { app: AppStateHook }) {
           </div>
         )}
 
-        {/* 요약 3카드 */}
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <SummaryCard accent="#2f4054" label={`${scopeLabel} 평균`} value={data.avg != null ? `${data.avg}` : "-"} unit="점"
-            note={hasData ? `${data.attemptCount}회 응시 기준` : "응시 기록 없음"} />
-          <SummaryCard accent="#6f8f78" label="본시험 통과" value={`${data.mainPassCount}`} unit={`/ ${data.attemptCount}회`}
-            note={
-              !hasData
-                ? "응시 기록 없음"
-                : data.retestPassCount > 0
-                ? `재시험 통과 ${data.retestPassCount}회`
-                : data.failCount > 0
-                ? `미통과 ${data.failCount}회`
-                : "전부 통과"
-            } />
-          <SummaryCard accent="#a98249" label={`${scopeLabel} 성장`}
-            value={data.growthDelta != null && data.growthDelta > 0 ? `+${data.growthDelta}` : data.growthDelta != null ? `${data.growthDelta}` : "-"}
-            unit="점"
-            note={data.growthDelta != null && data.growthDelta > 0 ? "초반 대비 상승" : "2회 이상 응시 시 집계"}
-            noteUp={data.growthDelta != null && data.growthDelta > 0} />
+        <div className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-lab-line bg-lab-paper p-1 shadow-lab-sm">
+          {[
+            { key: "word", label: "단어 성적" },
+            { key: "monthly", label: "먼슬리 성적" },
+          ].map((item) => {
+            const on = scoreView === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setScoreView(item.key as "word" | "monthly")}
+                className={`rounded-full px-4 py-2.5 text-[13px] font-bold transition ${
+                  on ? "bg-lab-navy text-white shadow-lab-sm" : "text-lab-muted hover:text-lab-navy"
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* 성장 추이 */}
-        <Card
-          title="성장 추이"
-          right={<span className="text-[11.5px] text-lab-muted">단어시험 회차별 점수</span>}
-        >
-          {data.chart.length === 0 ? (
-            <EmptyState>아직 이번 달 시험 기록이 없어요.</EmptyState>
-          ) : (
-            <>
-              <div style={{ width: "100%", height: 260 }}>
-                <ResponsiveContainer>
-                  <LineChart data={data.chart} margin={{ top: 12, right: 18, left: -12, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e8e2d6" />
-                    <XAxis dataKey="label" fontSize={11} tickMargin={6} stroke="#9b9486" />
-                    <YAxis domain={[0, 100]} fontSize={11} unit="점" stroke="#9b9486" />
-                    <Tooltip
-                      formatter={(v: number) => [`${v}점`, "점수"]}
-                      contentStyle={{ borderRadius: 12, border: "1px solid #e3ded3", fontSize: 12 }}
-                    />
-                    <ReferenceLine
-                      y={data.cut}
-                      stroke="#a98249"
-                      strokeDasharray="5 5"
-                      strokeWidth={1.5}
-                      label={{ value: `통과 기준 ${data.cut}점`, position: "insideTopRight", fontSize: 10, fill: "#a98249" }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="score"
-                      stroke="#2f4054"
-                      strokeWidth={2.5}
-                      dot={{ r: 3.5, fill: "#fff", stroke: "#2f4054", strokeWidth: 2 }}
-                      activeDot={{ r: 5, fill: "#a98249", stroke: "#a98249" }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-2 flex gap-4 text-[11px] text-lab-muted">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block h-0 w-4 border-t-2 border-lab-navy" /> 회차별 점수
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block h-0 w-4 border-t-2 border-dashed border-lab-gold" /> 통과 기준선
-                </span>
-              </div>
-            </>
-          )}
-        </Card>
+        {/* 요약 3카드 */}
+        {scoreView === "word" && (
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <SummaryCard accent="#2f4054" label={`${scopeLabel} 평균`} value={data.avg != null ? `${data.avg}` : "-"} unit="점"
+              note={hasData ? `${data.attemptCount}회 응시 기준` : "응시 기록 없음"} />
+            <SummaryCard accent="#6f8f78" label="본시험 통과" value={`${data.mainPassCount}`} unit={`/ ${data.attemptCount}회`}
+              note={
+                !hasData
+                  ? "응시 기록 없음"
+                  : data.retestPassCount > 0
+                  ? `재시험 통과 ${data.retestPassCount}회`
+                  : data.failCount > 0
+                  ? `미통과 ${data.failCount}회`
+                  : "전부 통과"
+              } />
+            <SummaryCard accent="#a98249" label={`${scopeLabel} 성장`}
+              value={data.growthDelta != null && data.growthDelta > 0 ? `+${data.growthDelta}` : data.growthDelta != null ? `${data.growthDelta}` : "-"}
+              unit="점"
+              note={data.growthDelta != null && data.growthDelta > 0 ? "초반 대비 상승" : "2회 이상 응시 시 집계"}
+              noteUp={data.growthDelta != null && data.growthDelta > 0} />
+          </div>
+        )}
 
-        {/* 회차별 기록 */}
-        <Card title="회차별 기록" right={<span className="text-[11.5px] text-lab-muted">최근 → 과거</span>}>
-          {data.records.length === 0 ? (
-            <EmptyState>표시할 기록이 없어요.</EmptyState>
-          ) : (
-            <ul>
-              {data.records.map((r) => (
-                <li key={r.id} className="flex items-center gap-3 border-b border-[#f1ede2] py-3 last:border-b-0">
-                  <div className="w-11 shrink-0 text-[11.5px] font-bold text-lab-muted">{r.round}회</div>
-                  <div className="flex-1">
-                    <div className="flex items-baseline justify-between">
-                      <b className="text-[14px] text-lab-ink">{r.score}점</b>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${
-                          r.passed ? "bg-lab-green-soft text-lab-green" : "bg-[#f6efe0] text-[#b08a4f]"
-                        }`}
-                      >
-                        {r.passed ? "통과" : "재시험"}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-[#efeadd]">
-                      <span
-                        className="block h-full rounded"
-                        style={{ width: `${Math.max(0, Math.min(100, r.score))}%`, background: r.passed ? "#6f8f78" : "#b08a4f" }}
-                      />
-                    </div>
+        {scoreView === "monthly" && (
+          <GuardianMonthlyResults reports={monthlyReports} />
+        )}
+
+        {/* 학원 공지 · 숙제 */}
+        {db.notices.length > 0 && (
+          <div className="mb-4">
+            <NoticeBoard notices={db.notices} />
+          </div>
+        )}
+        <div className="mb-4">
+          <HomeworkBoard homeworks={db.homeworks} />
+        </div>
+
+        {scoreView === "word" && (
+          <>
+            {/* 성장 추이 */}
+            <Card
+              title="성장 추이"
+              right={<span className="text-[11.5px] text-lab-muted">단어시험 회차별 점수</span>}
+            >
+              {data.chart.length === 0 ? (
+                <EmptyState>아직 이번 달 시험 기록이 없어요.</EmptyState>
+              ) : (
+                <>
+                  <div style={{ width: "100%", height: 260 }}>
+                    <ResponsiveContainer>
+                      <LineChart data={data.chart} margin={{ top: 12, right: 18, left: -12, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e8e2d6" />
+                        <XAxis dataKey="label" fontSize={11} tickMargin={6} stroke="#9b9486" />
+                        <YAxis domain={[0, 100]} fontSize={11} unit="점" stroke="#9b9486" />
+                        <Tooltip
+                          formatter={(v: number) => [`${v}점`, "점수"]}
+                          contentStyle={{ borderRadius: 12, border: "1px solid #e3ded3", fontSize: 12 }}
+                        />
+                        <ReferenceLine
+                          y={data.cut}
+                          stroke="#a98249"
+                          strokeDasharray="5 5"
+                          strokeWidth={1.5}
+                          label={{ value: `통과 기준 ${data.cut}점`, position: "insideTopRight", fontSize: 10, fill: "#a98249" }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="score"
+                          stroke="#2f4054"
+                          strokeWidth={2.5}
+                          dot={{ r: 3.5, fill: "#fff", stroke: "#2f4054", strokeWidth: 2 }}
+                          activeDot={{ r: 5, fill: "#a98249", stroke: "#a98249" }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+                  <div className="mt-2 flex gap-4 text-[11px] text-lab-muted">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-0 w-4 border-t-2 border-lab-navy" /> 회차별 점수
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-0 w-4 border-t-2 border-dashed border-lab-gold" /> 통과 기준선
+                    </span>
+                  </div>
+                </>
+              )}
+            </Card>
+
+            {/* 회차별 기록 */}
+            <Card title="회차별 기록" right={<span className="text-[11.5px] text-lab-muted">최근 → 과거</span>}>
+              {data.records.length === 0 ? (
+                <EmptyState>표시할 기록이 없어요.</EmptyState>
+              ) : (
+                <ul>
+                  {data.records.map((r) => (
+                    <li key={r.id} className="flex items-center gap-3 border-b border-[#f1ede2] py-3 last:border-b-0">
+                      <div className="w-11 shrink-0 text-[11.5px] font-bold text-lab-muted">{r.round}회</div>
+                      <div className="flex-1">
+                        <div className="flex items-baseline justify-between">
+                          <b className="text-[14px] text-lab-ink">{r.score}점</b>
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${
+                              r.passed ? "bg-lab-green-soft text-lab-green" : "bg-[#f6efe0] text-[#b08a4f]"
+                            }`}
+                          >
+                            {r.passed ? "통과" : "재시험"}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-[#efeadd]">
+                          <span
+                            className="block h-full rounded"
+                            style={{ width: `${Math.max(0, Math.min(100, r.score))}%`, background: r.passed ? "#6f8f78" : "#b08a4f" }}
+                          />
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </>
+        )}
 
         <CreatorFooter className="mt-6" />
       </div>
     </div>
+  );
+}
+
+function GuardianMonthlyResults({ reports }: { reports: GuardianMonthlyReport[] }) {
+  return (
+    <Card title="먼슬리 성적" right={<span className="text-[11.5px] text-lab-muted">과목별 점수 · 반 평균</span>}>
+      {reports.length === 0 ? (
+        <EmptyState>선택한 기간에 표시할 먼슬리 성적이 없어요.</EmptyState>
+      ) : (
+        <div className="space-y-3">
+          {reports.map(({ test, result }) => {
+            const total = monthlyTotal(result.scores, test);
+            const max = monthlyMaxTotal(test);
+            const pct = round1(monthlyPercent(result.scores, test));
+            const averages = new Map((test.classStat?.sectionAverages ?? []).map((avg) => [avg.key, avg]));
+
+            return (
+              <div key={test.id} className="rounded-2xl border border-lab-line bg-lab-paper px-4 py-3 shadow-lab-sm">
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-[15px] font-extrabold text-lab-ink">{test.name}</div>
+                    <div className="mt-0.5 text-[12px] font-medium text-lab-muted">{test.date}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-[#eef1f6] px-3 py-1 text-[12px] font-bold text-lab-navy">
+                      총점 {round1(total)} / {max}
+                    </span>
+                    <span className="rounded-full bg-lab-green-soft px-3 py-1 text-[12px] font-bold text-lab-green">
+                      백점환산 {pct}점
+                    </span>
+                    {test.classStat && (
+                      <span className="rounded-full bg-[#f1ede2] px-3 py-1 text-[12px] font-bold text-lab-muted">
+                        반 평균 {test.classStat.avgPercent}점
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {test.sections.map((section) => {
+                    const score = result.scores[section.key];
+                    const avg = averages.get(section.key);
+                    return (
+                      <div key={section.key} className="rounded-xl border border-[#e8e2d6] bg-white/65 px-3 py-2.5">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="truncate text-[12px] font-bold text-lab-muted">{section.label}</span>
+                          <span className="shrink-0 text-[11px] text-lab-muted">/{section.maxScore}</span>
+                        </div>
+                        <div className="flex items-end justify-between gap-3">
+                          <div>
+                            <div className="font-serif text-[24px] font-bold leading-none text-lab-ink">
+                              {typeof score === "number" ? round1(score) : "-"}
+                            </div>
+                            <div className="mt-1 text-[11px] font-medium text-lab-muted">학생 점수</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[13px] font-extrabold text-lab-navy">
+                              {avg?.avgScore != null ? `${avg.avgScore}점` : "-"}
+                            </div>
+                            <div className="mt-1 text-[11px] font-medium text-lab-muted">
+                              반 평균{avg?.count ? ` · ${avg.count}명` : ""}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
 
