@@ -7,14 +7,16 @@ import RetestTab from "@/components/RetestTab";
 import StatsTab from "@/components/StatsTab";
 import ManageTab from "@/components/ManageTab";
 import MonthlyTab from "@/components/MonthlyTab";
+import PrintTab from "@/components/PrintTab";
 import { Button, Modal, Field, Input } from "@/components/ui";
 import CreatorFooter from "@/components/CreatorFooter";
 
-type Tab = "score" | "retest" | "stats" | "monthly" | "manage";
+type Tab = "score" | "retest" | "print" | "stats" | "monthly" | "manage";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "score", label: "점수 입력", icon: "✏️" },
   { id: "retest", label: "재시험", icon: "🔁" },
+  { id: "print", label: "시험지", icon: "🖨️" },
   { id: "stats", label: "통계", icon: "📊" },
   { id: "monthly", label: "먼슬리", icon: "🗓️" },
   { id: "manage", label: "관리", icon: "⚙️" },
@@ -31,7 +33,7 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
 
   return (
     <div className="min-h-screen pb-24 sm:pb-8">
-      <header className="bg-lab-paper border-b border-lab-line sticky top-0 z-30">
+      <header className="bg-lab-paper border-b border-lab-line sticky top-0 z-30 no-print">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-2xl">📚</span>
@@ -75,15 +77,16 @@ export default function TeacherApp({ app }: { app: AppStateHook }) {
         )}
         {tab === "score" && <ScoreEntry app={app} />}
         {tab === "retest" && <RetestTab app={app} />}
+        {tab === "print" && <PrintTab app={app} />}
         {tab === "stats" && <StatsTab app={app} />}
         {tab === "monthly" && <MonthlyTab app={app} />}
         {tab === "manage" && <ManageTab app={app} />}
       </main>
 
-      <CreatorFooter className="px-4 pb-6" />
+      <CreatorFooter className="px-4 pb-6 no-print" />
 
-      <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-lab-paper border-t border-lab-line z-30">
-        <div className="grid grid-cols-5">
+      <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-lab-paper border-t border-lab-line z-30 no-print">
+        <div className="grid grid-cols-6">
           {TABS.map((t) => (
             <button
               key={t.id}

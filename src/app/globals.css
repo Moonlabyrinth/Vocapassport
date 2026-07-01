@@ -38,3 +38,36 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* 인쇄: 화면 UI는 숨기고 .print-area(시험지 출력 명단)만 인쇄 */
+@media print {
+  html,
+  body {
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body {
+    font-size: 12pt;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+  /* 배경색·테두리도 인쇄되게 */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
