@@ -12,7 +12,9 @@ import {
   MonthlySection,
   NoticeAudience,
   NoticeAttachment,
+  ExamPaper,
 } from "./types";
+import { examPaperKey } from "./course";
 import { isPassed, isPerfect, resolveThreshold, type AchievementPeriod } from "./logic";
 
 type ScoreRecordPatch = Partial<{
@@ -82,6 +84,8 @@ export type Action =
   | { type: "deleteMonthlyTest"; id: string }
   | { type: "setMonthlyResults"; monthlyTestId: string; entries: { studentId: string; scores: Record<string, number> }[] }
   | { type: "updateAchievementPeriods"; periods: AchievementPeriod[] }
+  | { type: "setExamPaper"; bookTitle: string; round: number; session: number; path: string; fileName: string }
+  | { type: "deleteExamPaper"; id: string }
   | {
       type: "completeRetest";
       retestId: string;
@@ -458,6 +462,45 @@ export function applyAction(db: Database, a: Action): ActionResult {
     }
     case "deleteNotice": {
       db.notices = db.notices.filter((n) => n.id !== a.id);
+      return { ok: true };
+    }
+
+    case "setExamPaper": {
+      const bookTitle = (a.bookTitle || "").trim();
+      const round = Number(a.round);
+      const session = Number(a.session);
+      if (!bookTitle) return { ok: false, error: "단어장 제목이 필요합니다." };
+      if (!(round >= 1 && round <= 3)) return { ok: false, error: "회독은 1~3이어야 합니다." };
+      if (!(session >= 1)) return { ok: false, error: "회차를 선택하세요." };
+      if (typeof a.path !== "string" || !a.path.startsWith("/api/uploads/")) {
+        return { ok: false, error: "업로드된 파일 경로가 올바르지 않습니다." };
+      }
+      const fileName = (a.fileName || "시험지.pdf").toString().slice(0, 200);
+      const key = examPaperKey(bookTitle, round, session);
+      const existing = db.examPapers.find(
+        (p) => examPaperKey(p.bookTitle, p.round, p.session) === key
+      );
+      if (existing) {
+        existing.path = a.path;
+        existing.fileName = fileName;
+        existing.updatedAt = now;
+        return { ok: true, id: existing.id };
+      }
+      const id = genId("xp");
+      db.examPapers.push({
+        id,
+        bookTitle,
+        round,
+        session,
+        path: a.path,
+        fileName,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return { ok: true, id };
+    }
+    case "deleteExamPaper": {
+      db.examPapers = db.examPapers.filter((p) => p.id !== a.id);
       return { ok: true };
     }
     case "setRecordPassStatus":

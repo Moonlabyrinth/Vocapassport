@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AppStateHook } from "@/lib/client";
+import { AppStateHook, uploadFile } from "@/lib/client";
 import { Button, Card, Field, Input, Select, Badge, EmptyState, TextInput } from "./ui";
 import DatePicker from "./DatePicker";
 import { isActiveStudent } from "@/lib/logic";
-import { maxSessionsForBook, sessionDayRange, recordLessonLabel } from "@/lib/course";
+import { maxSessionsForBook, sessionDayRange, recordLessonLabel, examPaperKey } from "@/lib/course";
 import { todayStr } from "@/lib/datetime";
-import { ScheduleType } from "@/lib/types";
+import { ExamPaper, ScheduleType } from "@/lib/types";
+import { buildBundle, type BundleItem } from "@/lib/pdfBundle";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const LS_KEY = "vp-print-plan-v1";
@@ -49,6 +50,93 @@ function scheduleTypeForWeekday(wd: number): ScheduleType | null {
   if (wd === 1 || wd === 3 || wd === 5) return "월수금";
   if (wd === 2 || wd === 4) return "화목";
   return null;
+}
+
+/** 한 진도(단어장·회독·회차)의 시험지 PDF 등록/교체/삭제 셀 */
+function ExamPaperCell({
+  app,
+  paper,
+  bookTitle,
+  round,
+  session,
+}: {
+  app: AppStateHook;
+  paper: ExamPaper | undefined;
+  bookTitle: string;
+  round: number;
+  session: number;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (f.type && f.type !== "application/pdf") {
+      alert("PDF 파일만 등록할 수 있습니다.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { path, name } = await uploadFile(f);
+      const r = await app.run({
+        type: "setExamPaper",
+        bookTitle,
+        round,
+        session,
+        path,
+        fileName: name,
+      });
+      if (!r.ok) alert(r.error);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDelete() {
+    if (!paper) return;
+    if (!confirm("등록된 시험지 파일을 목록에서 삭제할까요?")) return;
+    const r = await app.run({ type: "deleteExamPaper", id: paper.id });
+    if (!r.ok) alert(r.error);
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-lab-line pt-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/pdf"
+        onChange={onPick}
+        className="hidden"
+      />
+      {busy ? (
+        <Badge color="gray">업로드 중…</Badge>
+      ) : paper ? (
+        <>
+          <Badge color="green">📄 등록됨</Badge>
+          <span className="text-xs text-lab-muted max-w-[12rem] truncate" title={paper.fileName}>
+            {paper.fileName}
+          </span>
+          <Button size="sm" variant="soft" onClick={() => inputRef.current?.click()}>
+            교체
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onDelete}>
+            삭제
+          </Button>
+        </>
+      ) : (
+        <>
+          <Badge color="amber">시험지 파일 미등록</Badge>
+          <Button size="sm" variant="soft" onClick={() => inputRef.current?.click()}>
+            📄 PDF 등록
+          </Button>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function PrintTab({ app }: { app: AppStateHook }) {
@@ -109,6 +197,31 @@ export default function PrintTab({ app }: { app: AppStateHook }) {
   function activeCount(classId: string): number {
     return db.students.filter((s) => s.classId === classId && isActiveStudent(s)).length;
   }
+
+  // 등록된 시험지 파일: 키(단어장|회독|회차) → ExamPaper
+  const paperByKey = useMemo(() => {
+    const m = new Map<string, ExamPaper>();
+    for (const p of db.examPapers ?? []) {
+      m.set(examPaperKey(p.bookTitle, p.round, p.session), p);
+    }
+    return m;
+  }, [db.examPapers]);
+
+  // 묶음 PDF 생성 상태
+  const [bundling, setBundling] = useState(false);
+  // 등록된 시험지 파일 목록 펼침
+  const [showLibrary, setShowLibrary] = useState(false);
+
+  const sortedPapers = useMemo(
+    () =>
+      [...(db.examPapers ?? [])].sort(
+        (a, b) =>
+          a.bookTitle.localeCompare(b.bookTitle, "ko") ||
+          a.round - b.round ||
+          a.session - b.session
+      ),
+    [db.examPapers]
+  );
 
   const wd = weekdayOf(date);
   const todaySchedule = wd == null ? null : scheduleTypeForWeekday(wd);
@@ -179,6 +292,50 @@ export default function PrintTab({ app }: { app: AppStateHook }) {
   }, [rows, spare, db.students, db.classes]);
 
   const dateLabel = wd == null ? date : `${date} (${WEEKDAYS[wd]})`;
+
+  // 파일 등록/미등록으로 나눈 집계
+  const registeredAggs = aggregates.filter((a) => paperByKey.has(a.key));
+  const missingAggs = aggregates.filter((a) => !paperByKey.has(a.key));
+
+  async function makeBundle() {
+    const items: BundleItem[] = registeredAggs.map((a) => ({
+      path: paperByKey.get(a.key)!.path,
+      copies: a.copies,
+      label: `${a.bookTitle} ${a.label}`,
+    }));
+    if (items.length === 0) {
+      alert("등록된 시험지 파일이 없습니다. 먼저 진도별로 PDF를 등록하세요.");
+      return;
+    }
+    setBundling(true);
+    try {
+      const { blob, totalPages, failed } = await buildBundle(items);
+      if (!blob) {
+        alert("묶음 PDF를 만들지 못했습니다. 파일을 확인하세요.");
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      // 새 탭으로 열어 인쇄 (팝업 차단 시 다운로드로 대체 안내)
+      const win = window.open(url, "_blank");
+      if (!win) {
+        const aEl = document.createElement("a");
+        aEl.href = url;
+        aEl.download = `시험지묶음_${date}.pdf`;
+        aEl.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      const notes: string[] = [`총 ${totalPages}페이지 생성`];
+      if (failed.length > 0) notes.push(`실패(제외): ${failed.join(", ")}`);
+      if (missingAggs.length > 0) {
+        notes.push(`파일 미등록 ${missingAggs.length}종은 빠졌습니다(수동 인쇄 필요).`);
+      }
+      if (failed.length > 0 || missingAggs.length > 0) alert(notes.join("\n"));
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBundling(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -372,6 +529,17 @@ export default function PrintTab({ app }: { app: AppStateHook }) {
                       )}
                     </div>
                   )}
+                  {r.classId && r.bookTitle.trim() !== "" && r.session !== "" && (
+                    <ExamPaperCell
+                      app={app}
+                      paper={paperByKey.get(
+                        examPaperKey(r.bookTitle, r.round, r.session as number)
+                      )}
+                      bookTitle={r.bookTitle}
+                      round={r.round}
+                      session={r.session as number}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -384,24 +552,45 @@ export default function PrintTab({ app }: { app: AppStateHook }) {
         title="인쇄 명단"
         className="no-print"
         right={
-          <Button
-            variant="navy"
-            onClick={() => window.print()}
-            disabled={aggregates.length === 0}
-          >
-            🖨️ 인쇄
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="soft"
+              onClick={makeBundle}
+              disabled={aggregates.length === 0 || bundling}
+            >
+              {bundling ? "묶는 중…" : "📚 시험지 묶음 PDF"}
+            </Button>
+            <Button
+              variant="navy"
+              onClick={() => window.print()}
+              disabled={aggregates.length === 0}
+            >
+              🖨️ 명단 인쇄
+            </Button>
+          </div>
         }
       >
         {aggregates.length === 0 ? (
           <EmptyState>선택한 진도가 없습니다. 위에서 반·단어장·회차를 채워주세요.</EmptyState>
         ) : (
-          <p className="text-sm text-lab-muted">
-            아래 명단이 그대로 인쇄됩니다. 총 <b>{kinds}</b>종 · <b>{totalCopies}</b>부.
-            {incompleteRows > 0 && (
-              <span className="text-amber-600"> (미완성 {incompleteRows}행 제외)</span>
+          <div className="space-y-2 text-sm text-lab-muted">
+            <p>
+              총 <b>{kinds}</b>종 · <b>{totalCopies}</b>부.
+              {incompleteRows > 0 && (
+                <span className="text-amber-600"> (미완성 {incompleteRows}행 제외)</span>
+              )}
+            </p>
+            <p>
+              <b>📚 시험지 묶음 PDF</b>: 등록된 시험지를 부수만큼 복제해 한 파일로 병합 →
+              새 탭에서 한 번에 인쇄. <b>🖨️ 명단 인쇄</b>: 아래 부수 요약표를 인쇄.
+            </p>
+            {missingAggs.length > 0 && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-amber-700">
+                파일 미등록 <b>{missingAggs.length}</b>종 — 묶음에서 제외됩니다(수동 인쇄 필요):{" "}
+                {missingAggs.map((a) => `${a.bookTitle} ${a.label}`).join(" / ")}
+              </div>
             )}
-          </p>
+          </div>
         )}
       </Card>
 
@@ -427,6 +616,13 @@ export default function PrintTab({ app }: { app: AppStateHook }) {
                     <td className="py-2 pr-3 text-lab-ink">
                       <div className="font-medium">{a.bookTitle}</div>
                       <div className="text-lab-muted">{a.label}</div>
+                      <div className="text-xs">
+                        {paperByKey.has(a.key) ? (
+                          <span className="text-lab-muted">📄 파일 등록됨</span>
+                        ) : (
+                          <span className="text-amber-600">✎ 파일 미등록 · 수동 인쇄</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2 pr-3 text-lab-muted">
                       {a.classes.map((c, i) => (
@@ -458,6 +654,59 @@ export default function PrintTab({ app }: { app: AppStateHook }) {
           </div>
         </div>
       )}
+
+      {/* 등록된 시험지 파일 관리 */}
+      <Card
+        title={`등록된 시험지 파일 (${sortedPapers.length})`}
+        className="no-print"
+        right={
+          <Button size="sm" variant="ghost" onClick={() => setShowLibrary((v) => !v)}>
+            {showLibrary ? "접기" : "펼치기"}
+          </Button>
+        }
+      >
+        {sortedPapers.length === 0 ? (
+          <EmptyState>
+            아직 등록된 시험지 파일이 없습니다. 위 진도 행에서 <b>📄 PDF 등록</b>으로 추가하세요.
+          </EmptyState>
+        ) : showLibrary ? (
+          <div className="space-y-1">
+            {sortedPapers.map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-lab-line bg-[#faf8f2] px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <span className="font-medium text-lab-ink">{p.bookTitle}</span>{" "}
+                  <span className="text-lab-muted">
+                    {recordLessonLabel({ bookTitle: p.bookTitle, round: p.round, session: p.session })}
+                  </span>
+                  <div className="text-xs text-lab-muted truncate" title={p.fileName}>
+                    <a href={p.path} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                      {p.fileName}
+                    </a>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    if (!confirm("이 시험지 파일을 목록에서 삭제할까요?")) return;
+                    const r = await app.run({ type: "deleteExamPaper", id: p.id });
+                    if (!r.ok) alert(r.error);
+                  }}
+                >
+                  삭제
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-lab-muted">
+            {sortedPapers.length}개 파일 등록됨. <b>펼치기</b>로 목록을 확인/삭제할 수 있어요.
+          </p>
+        )}
+      </Card>
     </div>
   );
 }

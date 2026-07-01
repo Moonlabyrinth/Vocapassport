@@ -93,6 +93,7 @@ export function studentView(
       monthlyResults: [],
       homeworks: [],
       notices: [],
+      examPapers: [],
       auditLogs: [],
       settings: publicSettings(db.settings),
     };
@@ -115,6 +116,7 @@ export function studentView(
     monthlyResults: myMonthlyResults,
     homeworks: db.homeworks.filter((h) => h.classId === me.classId),
     notices: visibleNoticesFor(db, viewerRole),
+    examPapers: [], // 시험지 파일 경로는 학생/보호자에게 노출하지 않음
     auditLogs: [],
     settings: publicSettings(db.settings),
   };

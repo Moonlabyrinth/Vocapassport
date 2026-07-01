@@ -134,6 +134,7 @@ function mimeFromExt(name: string): string {
   const m: Record<string, string> = {
     ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
     ".webp": "image/webp", ".heic": "image/heic",
+    ".pdf": "application/pdf",
   };
   return m[ext] || "application/octet-stream";
 }

@@ -22,3 +22,8 @@ export function recordLessonLabel(record: Pick<ScoreRecord, "bookTitle" | "round
   return `${record.round}회독 · ${record.session}회차 (${sessionDayRange(record.session, record.bookTitle)})`;
 }
 
+/** 시험지 파일/집계 공용 키 — (단어장·회독·회차) 하나를 식별 */
+export function examPaperKey(bookTitle: string, round: number, session: number): string {
+  return `${bookTitle}|${round}|${session}`;
+}
+

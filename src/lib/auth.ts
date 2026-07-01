@@ -188,6 +188,8 @@ function authorizeStaffAction(role: StaffRole | undefined, action: Action): stri
     case "createMonthlyTest":
     case "updateMonthlyTest":
     case "deleteMonthlyTest":
+    case "setExamPaper":
+    case "deleteExamPaper":
       return staffCanManageStructure(role) ? null : "학생/반/시험 구조 관리는 부원장 이상만 가능합니다.";
 
     case "deleteRecord":

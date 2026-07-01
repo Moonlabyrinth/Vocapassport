@@ -244,6 +244,22 @@ export interface MonthlyResult {
   updatedAt: string;
 }
 
+// ===================== 시험지 파일 (정규 단어시험지 PDF) =====================
+/**
+ * 정규 시험지 PDF 등록 — (단어장 제목·회독·회차) 하나당 한 파일.
+ * 시험지 탭에서 부수만큼 묶음 인쇄할 때 사용. 학생/보호자 뷰에는 노출하지 않는다.
+ */
+export interface ExamPaper {
+  id: string;
+  bookTitle: string; // 집계 키의 단어장 축 (PrintTab과 동일)
+  round: number; // 회독 1~3
+  session: number; // 회차
+  path: string; // 업로드 경로 "/api/uploads/..."
+  fileName: string; // 원본 파일명 (표시용)
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** 앱 설정 (인증 등) */
 export interface Settings {
   /** 선생님 비밀번호 해시/솔트 (서버 전용) */
@@ -273,6 +289,7 @@ export interface Database {
   monthlyResults: MonthlyResult[];
   homeworks: Homework[];
   notices: Notice[];
+  examPapers: ExamPaper[];
   auditLogs: AuditLog[];
   settings: Settings;
 }
@@ -288,6 +305,7 @@ export const emptyDatabase = (): Database => ({
   monthlyResults: [],
   homeworks: [],
   notices: [],
+  examPapers: [],
   auditLogs: [],
   settings: {},
 });
