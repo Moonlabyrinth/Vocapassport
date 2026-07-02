@@ -1,0 +1,13 @@
+{
+  "name": "passage-analyzer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "독해 지문 분석기 - 출처 추정, 어휘 클러스터, 수업 포인트 생성 (개인용)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.93.0"
+  }
+}

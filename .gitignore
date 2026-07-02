@@ -11,6 +11,10 @@ next-env.d.ts
 # - db.json(비밀번호 해시), secret.key 등 민감정보 보호
 /data
 
+# 지문 분석기(별도 프로그램) - API 키/분석 결과는 커밋 금지
+/passage-analyzer/data
+/passage-analyzer/node_modules
+
 .vercel
 .claude
 백업파일
