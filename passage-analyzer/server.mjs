@@ -11,10 +11,11 @@ import {
   listAnalyses,
   getAnalysis,
   saveAnalysis,
+  updateAnalysisSource,
   deleteAnalysis,
   ALLOWED_MODELS,
 } from "./lib/store.mjs";
-import { analyzePassage, friendlyError } from "./lib/analyze.mjs";
+import { analyzePassage, findSource, friendlyError } from "./lib/analyze.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, "public");
@@ -93,21 +94,59 @@ async function handleAnalyze(req, res) {
   }
 
   const { model } = getConfig();
-  const useWebSearch = body.useWebSearch !== false; // 기본 ON
 
   try {
     const { rawText, result } = await analyzePassage({
       apiKey,
       model,
       passage,
-      useWebSearch,
       onStatus: (message) => sse(res, "status", { message }),
       onDelta: (text) => sse(res, "delta", { text }),
     });
-    const record = saveAnalysis({ passage, result, rawText, model, webSearchUsed: useWebSearch });
+    const record = saveAnalysis({ passage, result, rawText, model });
     sse(res, "done", { record });
   } catch (err) {
     console.error("[analyze]", err);
+    sse(res, "error", { message: friendlyError(err) });
+  }
+  res.end();
+}
+
+// 저장된 분석의 출처만 별도로 웹 검색해 조회한다 (버튼 클릭 시에만 호출됨)
+async function handleFindSource(req, res, id) {
+  const record = getAnalysis(id);
+  if (!record) {
+    sendJson(res, 404, { error: "없는 분석입니다." });
+    return;
+  }
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  const apiKey = resolveApiKey();
+  if (!apiKey) {
+    sse(res, "error", { message: "API 키가 설정되지 않았습니다. 설정(⚙️)에서 Anthropic API 키를 입력해 주세요." });
+    res.end();
+    return;
+  }
+
+  const { model } = getConfig();
+
+  try {
+    const { rawText, result } = await findSource({
+      apiKey,
+      model,
+      passage: record.passage,
+      onStatus: (message) => sse(res, "status", { message }),
+      onDelta: (text) => sse(res, "delta", { text }),
+    });
+    const updated = updateAnalysisSource(id, { source: result?.source || null, rawText });
+    sse(res, "done", { record: updated });
+  } catch (err) {
+    console.error("[find-source]", err);
     sse(res, "error", { message: friendlyError(err) });
   }
   res.end();
@@ -122,6 +161,11 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && p === "/api/analyses") {
       return sendJson(res, 200, { analyses: listAnalyses() });
+    }
+
+    const sourceMatch = p.match(/^\/api\/analyses\/([0-9a-f-]+)\/source$/);
+    if (sourceMatch && req.method === "POST") {
+      return await handleFindSource(req, res, sourceMatch[1]);
     }
 
     const idMatch = p.match(/^\/api\/analyses\/([0-9a-f-]+)$/);

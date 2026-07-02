@@ -24,10 +24,7 @@
         <h2>영어 독해 지문 붙여넣기</h2>
         <textarea id="passage-input" placeholder="분석할 영어 지문을 붙여 넣으세요…" spellcheck="false"></textarea>
         <div class="input-actions">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-web-search" checked />
-            웹 검색으로 출처 찾기 <span class="hint">(정확도 ↑, 검색당 약 $0.01 추가)</span>
-          </label>
+          <span class="hint">출처 확인은 결과 화면의 '출처' 탭에서 필요할 때만 별도로 조회할 수 있습니다.</span>
           <button id="btn-analyze" class="primary-btn big">분석 시작</button>
         </div>
       </section>
@@ -43,8 +40,11 @@
       <!-- 결과 화면 -->
       <section id="view-result" hidden>
         <div class="result-head">
-          <h2 id="result-title"></h2>
-          <div class="result-meta" id="result-meta"></div>
+          <div>
+            <h2 id="result-title"></h2>
+            <div class="result-meta" id="result-meta"></div>
+          </div>
+          <button id="btn-print" class="print-btn" title="현재 탭을 인쇄/PDF로 저장" hidden>🖨️ 인쇄 / PDF 저장</button>
         </div>
         <nav class="tabs" id="result-tabs">
           <button data-tab="source" class="tab active">📌 출처</button>

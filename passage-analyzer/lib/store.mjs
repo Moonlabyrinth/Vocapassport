@@ -74,6 +74,7 @@ export function listAnalyses() {
       createdAt: a.createdAt,
       model: a.model,
       sourceGuess: a.result?.source?.guess || null,
+      sourceChecked: !!a.sourceChecked,
       parsed: !!a.result,
     }))
     .sort((x, y) => (y.createdAt || "").localeCompare(x.createdAt || ""));
@@ -83,19 +84,33 @@ export function getAnalysis(id) {
   return readAnalyses().find((a) => a.id === id) || null;
 }
 
-export function saveAnalysis({ passage, result, rawText, model, webSearchUsed }) {
+export function saveAnalysis({ passage, result, rawText, model }) {
   const record = {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     title: passage.replace(/\s+/g, " ").trim().slice(0, 60),
     passage,
     model,
-    webSearchUsed: !!webSearchUsed,
+    sourceChecked: false, // 출처는 필요할 때 findSource로 별도 조회
     result: result || null, // 파싱된 JSON (실패 시 null)
     rawText, // 모델 원문 응답 (파싱 실패 대비 보관)
   };
   const list = readAnalyses();
   list.push(record);
+  writeJson(ANALYSES_FILE, list);
+  return record;
+}
+
+// 별도 출처 조회(findSource) 결과를 기존 레코드에 병합해 저장한다.
+export function updateAnalysisSource(id, { source, rawText }) {
+  const list = readAnalyses();
+  const idx = list.findIndex((a) => a.id === id);
+  if (idx === -1) return null;
+  const record = list[idx];
+  record.result = record.result || {};
+  record.result.source = source || null;
+  record.sourceChecked = true;
+  if (rawText) record.sourceRawText = rawText;
   writeJson(ANALYSES_FILE, list);
   return record;
 }
